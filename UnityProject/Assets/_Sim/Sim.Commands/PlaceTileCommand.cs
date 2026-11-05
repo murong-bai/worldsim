@@ -48,6 +48,12 @@ namespace Sim.Commands
 
             sim.World.SetTile(Pos, TileId);
             // 支撑规则已在上方校验；放置只会增加承接/锚点，不会令既有结构失撑
+
+            // 容器（箱子）：放置即注册空容器条目（任务板据此发现目的地，M2.2）
+            if (rule.IsContainer)
+            {
+                sim.Containers.GetOrCreate(Pos);
+            }
         }
     }
 }

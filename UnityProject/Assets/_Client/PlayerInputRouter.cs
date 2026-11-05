@@ -29,10 +29,15 @@ namespace Sim.Client
         private int _selected;             // 当前选中索引
         private byte _lastMove = 255;      // 255 = 尚未发送过（首帧必发一次对齐）
         private byte _lastJump = 255;
+        private byte _lastClimb = 255;
         private float _digRepeatTimer;
         private SpriteRenderer _highlight; // 鼠标格高亮
         private int _recipeIndex;          // 当前选中配方
         private ushort _workbenchTileId;
+        private ushort _chestTileId;
+
+        /// <summary>挖掘任务格标记（黄框池，cap 32）。</summary>
+        private readonly List<SpriteRenderer> _jobMarkers = new List<SpriteRenderer>();
 
         private const float DigRepeatInterval = 0.22f; // 按住连挖间隔（秒）
         private const float CameraLerp = 10f;
@@ -80,28 +85,7 @@ namespace Sim.Client
         /// <summary>射程内最近的工作台（无则 null）。</summary>
         public GridPos? NearestWorkbench
         {
-            get
-            {
-                if (!_sim.Entities.TryGet(_playerId, out var p)) return null;
-                GridPos? best = null;
-                int bestDistSq = int.MaxValue;
-                for (int dy = -6; dy <= 6; dy++)
-                {
-                    for (int dx = -6; dx <= 6; dx++)
-                    {
-                        var pos = new GridPos(p.Pos.X + dx, p.Pos.Y + dy);
-                        if (_sim.World.GetTile(pos) != _workbenchTileId) continue;
-                        if (!_sim.WithinReach(_playerId, pos)) continue;
-                        int distSq = dx * dx + dy * dy;
-                        if (distSq < bestDistSq)
-                        {
-                            bestDistSq = distSq;
-                            best = pos;
-                        }
-                    }
-                }
-                return best;
-            }
+            get { return NearestTile(_workbenchTileId); }
         }
 
         /// <summary>
@@ -120,6 +104,7 @@ namespace Sim.Client
             }
             _placeable = list.ToArray();
             _workbenchTileId = defs.TileIds.ContainsKey("workbench") ? defs.TileIds["workbench"] : (ushort)0;
+            _chestTileId = defs.TileIds.ContainsKey("chest") ? defs.TileIds["chest"] : (ushort)0;
 
             var hlGo = new GameObject("CursorHighlight");
             _highlight = hlGo.AddComponent<SpriteRenderer>();
@@ -144,6 +129,7 @@ namespace Sim.Client
         {
             _lastMove = 255;
             _lastJump = 255;
+            _lastClimb = 255;
         }
 
         private void Update()
@@ -153,23 +139,101 @@ namespace Sim.Client
             HandleMouse();
             HandleHotbar();
             HandleCraft();
+            HandleJobCommands();
+            SyncJobMarkers();
         }
 
-        /// <summary>移动/跳跃 → 输入状态命令（仅变化时发送）。</summary>
+        /// <summary>移动/跳跃/攀爬 → 输入状态命令（仅变化时发送）。</summary>
         private void HandleMoveJump()
         {
             int axis = 0;
             if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) axis -= 1;
             if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) axis += 1;
             byte move = (byte)(axis < 0 ? 1 : (axis > 0 ? 2 : 0));
+
+            // W/上：跳跃（梯上自动转为攀爬上行，物理端裁决）；S/下：攀爬下行
             byte jump = (byte)((Input.GetKey(KeyCode.Space) || Input.GetKey(KeyCode.W)
                 || Input.GetKey(KeyCode.UpArrow)) ? 1 : 0);
+            byte climb = (byte)((Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) ? 2
+                : ((Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) ? 1 : 0));
 
-            if (move != _lastMove || jump != _lastJump)
+            if (move != _lastMove || jump != _lastJump || climb != _lastClimb)
             {
-                _sim.EnqueueCommand(new SetPlayerInputCommand(_playerId, move, jump));
+                _sim.EnqueueCommand(new SetPlayerInputCommand(_playerId, move, jump, climb));
                 _lastMove = move;
                 _lastJump = jump;
+                _lastClimb = climb;
+            }
+        }
+
+        /// <summary>X 标记/取消挖掘任务；V 把背包倒入射程内最近箱子。</summary>
+        private void HandleJobCommands()
+        {
+            if (Input.GetKeyDown(KeyCode.X))
+            {
+                _sim.EnqueueCommand(new MarkDigCommand(MouseCell()));
+            }
+            if (Input.GetKeyDown(KeyCode.V))
+            {
+                var chest = NearestTile(_chestTileId);
+                if (chest.HasValue)
+                {
+                    _sim.EnqueueCommand(new DepositCommand(chest.Value, _playerId));
+                }
+            }
+        }
+
+        /// <summary>射程内最近的目标类方块（工作台/箱子共用扫描）。</summary>
+        private GridPos? NearestTile(ushort tileId)
+        {
+            if (tileId == 0 || !_sim.Entities.TryGet(_playerId, out var p)) return null;
+            GridPos? best = null;
+            int bestDistSq = int.MaxValue;
+            for (int dy = -6; dy <= 6; dy++)
+            {
+                for (int dx = -6; dx <= 6; dx++)
+                {
+                    var pos = new GridPos(p.Pos.X + dx, p.Pos.Y + dy);
+                    if (_sim.World.GetTile(pos) != tileId) continue;
+                    if (!_sim.WithinReach(_playerId, pos)) continue;
+                    int distSq = dx * dx + dy * dy;
+                    if (distSq < bestDistSq)
+                    {
+                        bestDistSq = distSq;
+                        best = pos;
+                    }
+                }
+            }
+            return best;
+        }
+
+        /// <summary>挖掘任务格黄框同步（表现层，读任务板，cap 32）。</summary>
+        private void SyncJobMarkers()
+        {
+            int count = 0;
+            for (int i = 0; i < _sim.Jobs.Count && count < 32; i++)
+            {
+                var job = _sim.Jobs.Get(i);
+                if (job.Kind != JobKind.DigTile) continue;
+
+                while (_jobMarkers.Count <= count)
+                {
+                    var go = new GameObject("JobMarker" + _jobMarkers.Count);
+                    var sr = go.AddComponent<SpriteRenderer>();
+                    sr.sprite = PlaceholderSprites.SolidSprite(16);
+                    sr.color = new Color(1f, 0.85f, 0.2f, 0.35f);
+                    sr.sortingOrder = 15;
+                    _jobMarkers.Add(sr);
+                }
+
+                var marker = _jobMarkers[count];
+                if (!marker.gameObject.activeSelf) marker.gameObject.SetActive(true);
+                marker.transform.position = new Vector3(job.TargetPos.X + 0.5f, job.TargetPos.Y + 0.5f, 0f);
+                count++;
+            }
+            for (int i = count; i < _jobMarkers.Count; i++)
+            {
+                if (_jobMarkers[i].gameObject.activeSelf) _jobMarkers[i].gameObject.SetActive(false);
             }
         }
 

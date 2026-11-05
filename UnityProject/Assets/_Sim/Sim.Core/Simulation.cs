@@ -22,6 +22,8 @@ namespace Sim.Core
         public readonly CommandQueue Commands;
         /// <summary>全局参数（world.json：支撑跨度/世界边界等）。参与模拟 → 入哈希语义（配置即模拟输入）。</summary>
         public readonly GlobalDef Global;
+        public readonly ContainerStore Containers;
+        public readonly JobBoard Jobs;
 
         private readonly List<ISimSystem> _systems = new List<ISimSystem>();
         private readonly Dictionary<string, int> _recipeIndexById = new Dictionary<string, int>();
@@ -42,6 +44,8 @@ namespace Sim.Core
             Crafting = new CraftingStore();
             Rng = new SimRandom(seed);
             Commands = new CommandQueue();
+            Containers = new ContainerStore();
+            Jobs = new JobBoard();
         }
 
         /// <summary>注册顺序 = 每 tick 的执行顺序（确定性约束）。</summary>
@@ -84,17 +88,24 @@ namespace Sim.Core
         private static readonly Fix CellCenter = Fix.FromRaw(32768); // 0.5
 
         /// <summary>
-        /// 权威端射程校验：指定玩家实体到目标格中心的距离是否在射程内。
-        /// 用于挖掘/放置命令的防作弊校验（GDD §3.6：客户端只发操作，结果由权威端裁决）。
+        /// 权威端射程校验：指定角色实体（玩家或 Worker）到目标格中心的距离是否在射程内。
+        /// 用于挖掘/放置/存取命令的防作弊校验（GDD §3.6：客户端只发操作，结果由权威端裁决）。
         /// </summary>
         public bool WithinReach(int entityId, GridPos pos)
         {
             if (!Entities.TryGet(entityId, out var e)) return false;
-            if (e.Kind != (ushort)EntityKind.Player) return false;
+            if (e.Kind != (ushort)EntityKind.Player && e.Kind != (ushort)EntityKind.Worker) return false;
             Fix dx = e.FixX - (Fix.FromInt(pos.X) + CellCenter);
-            Fix dy = (e.FixY + Fix.FromRaw(58982L) /*0.9: 玩家中身高度*/) - (Fix.FromInt(pos.Y) + CellCenter);
+            Fix dy = (e.FixY + Fix.FromRaw(58982L) /*0.9: 角色中身高度*/) - (Fix.FromInt(pos.Y) + CellCenter);
             Fix distSq = dx * dx + dy * dy;
             return distSq <= MaxReachSq;
+        }
+
+        /// <summary>角色是否可持有背包/执行存取（玩家与小人）。</summary>
+        public bool IsActor(int entityId)
+        {
+            return Entities.TryGet(entityId, out var e)
+                && (e.Kind == (ushort)EntityKind.Player || e.Kind == (ushort)EntityKind.Worker);
         }
 
         /// <summary>按字符串 ID 查配方索引（craft 命令权威校验用）。</summary>
@@ -104,7 +115,7 @@ namespace Sim.Core
         }
 
         /// <summary>
-        /// 全状态哈希（WorldHash）：tick、种子、随机流状态、区块、实体、背包、加工任务。
+        /// 全状态哈希（WorldHash）：tick、种子、随机流状态、区块、实体、背包、加工任务、容器、任务板。
         /// 用途：CI 确定性测试 + 联机各端校对（GDD §3.3 / §3.6）。
         /// </summary>
         public ulong ComputeHash()
@@ -117,6 +128,8 @@ namespace Sim.Core
             Entities.HashInto(ref h);
             Inventories.HashInto(ref h);
             Crafting.HashInto(ref h);
+            Containers.HashInto(ref h);
+            Jobs.HashInto(ref h);
             return h.Value;
         }
     }

@@ -54,6 +54,7 @@ namespace SimHarness
             TestCrafting();
             TestStructuralSupport();
             TestM2Content();
+            TestM22();
             TestDeterminism();
             TestReplay();
             TestSaveLoad();
@@ -82,6 +83,8 @@ namespace SimHarness
         private static Simulation BuildSim(ulong seed, Defs defs)
         {
             var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray(), defs.Global);
+            // 注册顺序 = 每 tick 执行顺序（确定性约束）：JobSystem 先写输入，物理后消费
+            sim.RegisterSystem(new JobSystem());
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
@@ -89,6 +92,9 @@ namespace SimHarness
             sim.RegisterSystem(new CraftingSystem());
             WorldGen.GenerateTerrain(sim, KnownOf(defs));
             int pid = WorldGen.SpawnDefaultPlayer(sim, 0);   // 玩家实体 Id 恒为 1（首个实体）
+
+            // 开局自带 1 个小人（M2.2：自动化雏形；雇佣经济系统后续版本）
+            sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(2, SpawnGroundY(sim, 2)), 0, 0, 0);
 
             // 初始物资（与客户端 SimBootstrap 一致：3 麦种 + 6 木料 + 3 小麦 + 3 煤 + 2 铜矿石 + 2 胡萝卜种子）
             var inv = sim.Inventories.GetOrCreate(pid);
@@ -131,7 +137,7 @@ namespace SimHarness
         private static void TestDefLoading()
         {
             var defs = LoadDefs();
-            Check(defs.TileRules.Length == 13, "Defs: 方块数量 = 13");
+            Check(defs.TileRules.Length == 15, "Defs: 方块数量 = 15");
             Check(defs.TileIds["air"] == 0, "Defs: air 固定为 0");
             Check(defs.TileRules[defs.TileIds["stone"]].Solid, "Defs: stone 为固体");
             var platform = defs.TileRules[defs.TileIds["platform"]];
@@ -205,10 +211,10 @@ namespace SimHarness
             sim.Step();
             Check(sim.World.GetTile(target) == platform && sim.Commands.Applied.Count == 2, "命令: 非法重复放置被静默忽略");
 
-            // 挖掘测试列用 x=3：玩家出生在 x=0，原地掉落物会被拾取系统吸收
+            // 挖掘测试列用 x=5：玩家出生 x=0、小人出生 x=2，均超出拾取半径（1.5）不干扰掉落断言
             int y = 6;
-            while (!sim.IsSolid(new GridPos(3, y))) y--;
-            var digPos = new GridPos(3, y);
+            while (!sim.IsSolid(new GridPos(5, y))) y--;
+            var digPos = new GridPos(5, y);
             sim.EnqueueCommand(new DigTileCommand(digPos));
             sim.Step();
             Check(sim.World.GetTile(digPos) == 0, "命令: 挖掘生效");
@@ -282,6 +288,8 @@ namespace SimHarness
         private static Simulation BuildRunwaySim(Defs defs, ulong seed)
         {
             var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray(), defs.Global);
+            // 注册顺序 = 每 tick 执行顺序（确定性约束）：JobSystem 先写输入，物理后消费
+            sim.RegisterSystem(new JobSystem());
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
@@ -292,6 +300,14 @@ namespace SimHarness
                 sim.World.SetTile(new GridPos(x, 0), defs.TileIds["stone"]);
             }
             return sim;
+        }
+
+        /// <summary>找 x 列地表上方的可站立格 Y（出生用，与 SpawnDefaultPlayer 同逻辑）。</summary>
+        private static int SpawnGroundY(Simulation sim, int x)
+        {
+            int y = 16;
+            while (y > -20 && !sim.IsSolid(new GridPos(x, y - 1))) y--;
+            return y;
         }
 
         private static void TestPlayerMovement()
@@ -879,6 +895,206 @@ namespace SimHarness
                 else if (e.Aux == defs.ItemIds["carrot_seed"]) carrotSeeds += e.Aux2;
             }
             Check(carrots == 2 && carrotSeeds == 1, "M2.1: 胡萝卜成熟收获（产物 x2 + 种子 x1）");
+        }
+
+        /// <summary>M2.2 验证：攀爬物理 / Worker 跨台阶 / A* 寻路 / 箱子 / 小人任务闭环。</summary>
+        private static void TestM22()
+        {
+            var defs = LoadDefs();
+
+            // ---------- 1) 攀爬物理：玩家上梯 → 上升 → 悬停 ----------
+            {
+                var sim = BuildRunwaySim(defs, 702);
+                int pid = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(0, 1), 0, 0, 1);
+                for (int i = 0; i < 30; i++) sim.Step();
+                ushort ladder = defs.TileIds["ladder"];
+                for (int y = 1; y <= 6; y++) sim.World.SetTile(new GridPos(6, y), ladder);
+
+                // 走到梯子列（30 tick ≈ 6 格）
+                sim.EnqueueCommand(new SetPlayerInputCommand(pid, 2, 0, 0));
+                for (int i = 0; i < 30; i++) sim.Step();
+                sim.Entities.TryGet(pid, out var atLadder);
+
+                // 攀爬上行
+                sim.EnqueueCommand(new SetPlayerInputCommand(pid, 0, 0, 1));
+                for (int i = 0; i < 90; i++) sim.Step();
+                sim.Entities.TryGet(pid, out var up);
+                Check(up.FixY > atLadder.FixY + Fix.FromInt(3), "M2.2: 梯上攀爬上升 > 3 格 (y=" + up.FixY + ")");
+
+                // 悬停：松开攀爬键 → 挂在梯上不掉
+                Fix hoverY = up.FixY;
+                sim.EnqueueCommand(new SetPlayerInputCommand(pid, 0, 0, 0));
+                for (int i = 0; i < 60; i++) sim.Step();
+                sim.Entities.TryGet(pid, out var hover);
+                Check(Fix.Abs(hover.FixY - hoverY) < Fix.FromRaw(3277),
+                    "M2.2: 梯上无输入时悬停（不坠落）");
+
+                // 攀爬下行回到地面
+                sim.EnqueueCommand(new SetPlayerInputCommand(pid, 0, 0, 2));
+                for (int i = 0; i < 90; i++) sim.Step();
+                sim.Entities.TryGet(pid, out var down);
+                Check(down.Grounded == 1 && down.FixY == Fix.FromInt(1), "M2.2: 梯上下行回到地面");
+            }
+
+            // ---------- 2) A* 寻路：直线 / 台阶 / 梯子 / 不可达 ----------
+            {
+                var sim = BuildRunwaySim(defs, 704);
+
+                // 直线（跑道 (x,1) 全部可站立）
+                var p1 = Pathfinding.FindPath(sim, new GridPos(0, 1), new GridPos(10, 1));
+                Check(p1 != null && p1.Count == 10 && p1[9].X == 10 && p1[9].Y == 1,
+                    "M2.2: A* 直线 10 格路径");
+
+                // 台阶：x=5 一格高 → 路径跨上 (5,2)
+                sim.World.SetTile(new GridPos(5, 1), defs.TileIds["stone"]);
+                var p2 = Pathfinding.FindPath(sim, new GridPos(0, 1), new GridPos(10, 1));
+                bool stepped = false;
+                if (p2 != null)
+                {
+                    for (int i = 0; i < p2.Count; i++)
+                    {
+                        if (p2[i].X == 5 && p2[i].Y == 2) { stepped = true; break; }
+                    }
+                }
+                Check(p2 != null && stepped, "M2.2: A* 跨 1 格台阶路径（含 (5,2)）");
+
+                // 近距目标（固体格）：先于高墙测试（墙会挡路）
+                var p5 = Pathfinding.FindPathNear(sim, new GridPos(0, 1), new GridPos(20, 1), 4);
+                Check(p5 != null && p5.Count <= 16, "M2.2: A* 近距目标（固体格附近即达）");
+
+                // 高墙（2 格以上）不可达（Worker 无跳跃）
+                sim.World.SetTile(new GridPos(5, 2), defs.TileIds["stone"]);
+                sim.World.SetTile(new GridPos(5, 3), defs.TileIds["stone"]);
+                var p3 = Pathfinding.FindPath(sim, new GridPos(0, 1), new GridPos(10, 1));
+                Check(p3 == null, "M2.2: A* 高墙无跳跃不可达（返回 null）");
+                sim.World.SetTile(new GridPos(5, 2), 0);
+                sim.World.SetTile(new GridPos(5, 3), 0);
+
+                // 梯子垂直路径
+                ushort ladder = defs.TileIds["ladder"];
+                for (int y = 1; y <= 6; y++) sim.World.SetTile(new GridPos(8, y), ladder);
+                var p4 = Pathfinding.FindPath(sim, new GridPos(8, 1), new GridPos(8, 5));
+                bool ladderOk = p4 != null && p4.Count == 4;
+                if (ladderOk)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (p4[i].X != 8 || p4[i].Y != 2 + i) { ladderOk = false; break; }
+                    }
+                }
+                Check(ladderOk, "M2.2: A* 梯子垂直路径（(8,1)→(8,5)）");
+            }
+
+            // ---------- 4) 箱子：存入 / 溢出 / 挖出内容 / 放置注册 ----------
+            {
+                var sim = BuildRunwaySim(defs, 705);
+                int pid = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(1, 1), 0, 0, 1);
+                for (int i = 0; i < 30; i++) sim.Step();
+                ushort chest = defs.TileIds["chest"];
+
+                // 放置箱子 → 容器条目注册（搬运任务的目的地发现依赖此条目）
+                sim.World.SetTile(new GridPos(3, 1), chest);
+                sim.Containers.GetOrCreate(new GridPos(3, 1));
+                Check(sim.Containers.Count == 1, "M2.2: 箱子容器条目注册");
+
+                var inv = sim.Inventories.GetOrCreate(pid);
+                inv.AddItem(defs.ItemIds["bread"], 3);
+                sim.EnqueueCommand(new DepositCommand(new GridPos(3, 1), pid));
+                sim.Step();
+                sim.Containers.TryGet(new GridPos(3, 1), out var chestInv);
+                Check(chestInv != null && chestInv.CountOf(defs.ItemIds["bread"]) == 3
+                    && inv.CountOf(defs.ItemIds["bread"]) == 0,
+                    "M2.2: deposit 命令整背包存入箱子");
+
+                // 满箱溢出：10 槽全占（bread x3 + stone x450）→ 再存 stone x3 无处可放全留背包
+                sim.Containers.GetOrCreate(new GridPos(3, 1)).AddItem(defs.ItemIds["stone"], 450);
+                inv.AddItem(defs.ItemIds["stone"], 3);
+                sim.EnqueueCommand(new DepositCommand(new GridPos(3, 1), pid));
+                sim.Step();
+                Check(chestInv.CountOf(defs.ItemIds["stone"]) == 450 && inv.CountOf(defs.ItemIds["stone"]) == 3,
+                    "M2.2: 箱满无空槽余量留在背包");
+
+                // 挖箱：内容物 + 本体掉落
+                sim.EnqueueCommand(new DigTileCommand(new GridPos(3, 1)));
+                sim.Step();
+                int breadDrops = CountItems(sim, defs.ItemIds["bread"], 3, 0, 4);
+                int stoneDrops = CountItems(sim, defs.ItemIds["stone"], 3, 0, 4);
+                Check(breadDrops >= 1 && stoneDrops >= 1 && sim.Containers.Count == 0,
+                    "M2.2: 挖箱弹出内容物并移除容器");
+            }
+
+            // ---------- 3) 小人任务闭环（M2.2 验收）：标记挖 → 寻路(跨台阶) → 挖 → 拾取 → 入箱 ----------
+            {
+                var sim = BuildRunwaySim(defs, 706);
+                int wid = sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(0, 1), 0, 0, 0);
+                // 玩家在目标处放箱子（放置命令路径 → 容器自动注册，搬运目的地发现依赖）
+                int pid = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(19, 1), 0, 0, 1);
+                for (int i = 0; i < 30; i++) sim.Step();
+                sim.Inventories.GetOrCreate(pid).AddItem(defs.ItemIds["wood"], 2);
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(20, 1), defs.TileIds["chest"]) { ByEntityId = pid });
+                sim.Step();
+                Check(sim.World.GetTile(new GridPos(20, 1)) == defs.TileIds["chest"]
+                    && sim.Containers.Count == 1,
+                    "M2.2: 放置箱子自动注册容器条目");
+
+                // 挖掘目标 x=12（一格高石块），路径中 x=5 另有一格高台阶（验证 Worker step-up）
+                sim.World.SetTile(new GridPos(5, 1), defs.TileIds["stone"]);
+                sim.World.SetTile(new GridPos(12, 1), defs.TileIds["stone"]);
+                sim.EnqueueCommand(new MarkDigCommand(new GridPos(12, 1)));
+                sim.Step();
+                Check(sim.Jobs.Count == 1 && sim.Jobs.Get(0).Kind == JobKind.DigTile,
+                    "M2.2: 标记挖掘 → 任务板登记");
+
+                // 幂等：重复标记不产生第二个任务
+                sim.EnqueueCommand(new MarkDigCommand(new GridPos(12, 1)));
+                sim.Step();
+                Check(sim.Jobs.Count == 1, "M2.2: 重复标记幂等");
+
+                // 闭环：领任务 → 寻路（跨台阶）→ 挖 → 掉落物 → 自动搬运 → 入箱
+                bool dug = false, hauled = false, delivered = false;
+                Fix workerMaxY = Fix.Zero;
+                for (int i = 0; i < 1200; i++)
+                {
+                    sim.Step();
+                    if (sim.Entities.TryGet(wid, out var w) && w.FixY > workerMaxY) workerMaxY = w.FixY;
+                    if (!dug && sim.World.GetTile(new GridPos(12, 1)) == 0)
+                    {
+                        dug = true;
+                    }
+                    if (dug && !hauled)
+                    {
+                        for (int j = 0; j < sim.Jobs.Count; j++)
+                        {
+                            if (sim.Jobs.Get(j).Kind == JobKind.HaulItem) { hauled = true; break; }
+                        }
+                    }
+                    if (hauled && !delivered)
+                    {
+                        if (sim.Containers.TryGet(new GridPos(20, 1), out var chestInv)
+                            && chestInv.CountOf(defs.ItemIds["stone"]) >= 1)
+                        {
+                            delivered = true;
+                        }
+                    }
+                }
+                sim.Containers.TryGet(new GridPos(20, 1), out var finalChest);
+                var finalJobs = sim.Jobs.Count;
+                var workerInv = sim.Inventories.TryGet(wid, out var wInv) ? wInv : null;
+                Check(workerMaxY >= Fix.FromInt(2), "M2.2: Worker 跨上 1 格台阶（寻路含 step-up，maxY=" + workerMaxY + "）");
+                Check(dug, "M2.2: 小人领取挖掘任务并挖掉目标格");
+                Check(hauled, "M2.2: 掉落物自动生成搬运任务");
+                Check(delivered && finalChest != null && finalChest.CountOf(defs.ItemIds["stone"]) >= 1,
+                    "M2.2: 小人拾取掉落物存入箱子（闭环完成）");
+                Check(finalJobs == 0 && workerInv != null && TotalInvCount(workerInv) == 0,
+                    "M2.2: 任务清空、小人背包清空");
+            }
+        }
+
+        private static int TotalInvCount(Inventory inv)
+        {
+            int total = 0;
+            for (int i = 0; i < Inventory.SlotCount; i++) total += inv.Counts[i];
+            return total;
         }
 
         private static void TestDeterminism()

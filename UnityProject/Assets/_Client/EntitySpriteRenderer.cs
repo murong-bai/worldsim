@@ -7,12 +7,13 @@ namespace Sim.Client
 {
     /// <summary>
     /// 实体渲染（M1 占位：色块精灵池）。
-    /// 玩家 = 16px 蓝白块；掉落物 = 12px 物品配色块。
+    /// 玩家 = 16px 蓝白块；小人（Worker）= 16px 绿白块；掉落物 = 12px 物品配色块。
     /// 每逻辑帧全量同步位置（实体数量小；后续按需改为变更驱动）。
     /// </summary>
     public sealed class EntitySpriteRenderer : MonoBehaviour
     {
         private static readonly Color PlayerColor = new Color(0.42f, 0.68f, 1f);
+        private static readonly Color WorkerColor = new Color(0.55f, 0.85f, 0.55f);
 
         private Simulation _sim;
         private Sprite _playerSprite;
@@ -61,15 +62,16 @@ namespace Sim.Client
 
                 var e = entities[i];
                 bool isPlayer = e.Kind == (ushort)EntityKind.Player;
-                sr.sprite = isPlayer ? _playerSprite : _itemSprite;
-                sr.color = isPlayer ? PlayerColor : ItemColor(e.Aux);
+                bool isWorker = e.Kind == (ushort)EntityKind.Worker;
+                sr.sprite = (isPlayer || isWorker) ? _playerSprite : _itemSprite;
+                sr.color = isPlayer ? PlayerColor : (isWorker ? WorkerColor : ItemColor(e.Aux));
 
                 // Fix 精确位置：X = 碰撞盒中心；Y = 底边 + 半高（贴地）
-                float halfHeight = isPlayer ? 0.5f : 0.375f;
+                float halfHeight = (isPlayer || isWorker) ? 0.5f : 0.375f;
                 sr.transform.position = new Vector3(
                     e.FixX.ToFloat(), e.FixY.ToFloat() + halfHeight, 0f);
 
-                if (isPlayer)
+                if (isPlayer || isWorker)
                 {
                     bool faceRight = e.Data == 1;
                     var scale = sr.transform.localScale;

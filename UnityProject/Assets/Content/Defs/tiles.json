@@ -11,5 +11,7 @@
   { "id": "stone_bricks", "solid": true, "placeable": true, "dropItem": "stone_bricks", "placeItem": "stone_bricks", "color": "#9CA3AB" },
   { "id": "coal_ore", "solid": true, "placeable": false, "dropItem": "coal", "color": "#3B3B42" },
   { "id": "copper_ore", "solid": true, "placeable": false, "dropItem": "copper_ore", "color": "#C07848" },
-  { "id": "carrot_crop", "solid": false, "placeable": true, "placeItem": "carrot_seed", "growthTicks": 180, "harvestItem": "carrot", "color": "#E8823A" }
+  { "id": "carrot_crop", "solid": false, "placeable": true, "placeItem": "carrot_seed", "growthTicks": 180, "harvestItem": "carrot", "color": "#E8823A" },
+  { "id": "ladder", "solid": false, "placeable": true, "dropItem": "wood", "placeItem": "wood", "isLadder": true, "color": "#C8B26A" },
+  { "id": "chest", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "isContainer": true, "color": "#A0784A" }
 ]

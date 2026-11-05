@@ -3,8 +3,9 @@ using Sim.Core;
 namespace Sim.Systems
 {
     /// <summary>
-    /// 掉落物拾取：玩家碰撞范围（半径 1.5 格，从玩家中身算）内的掉落物
+    /// 掉落物拾取：角色（玩家与 Worker）碰撞范围（半径 1.5 格，从中身算）内的掉落物
     /// 自动吸收进背包（Terraria 式自动拾取），堆满则部分拾取留余量。
+    /// Worker 拾取是 M2.2 搬运闭环的一环（JobSystem 判断背包有货 → 送箱）。
     ///
     /// 这是模拟系统而非命令 —— 拾取是位置接触的必然结果，无需玩家操作；
     /// 背包状态全部入 WorldHash（确定性/联机各端一致）。
@@ -27,12 +28,12 @@ namespace Sim.Systems
 
             for (int i = 0; i < entities.Count; i++)
             {
-                var player = entities[i];
-                if (player.Kind != (ushort)EntityKind.Player) continue;
+                var actor = entities[i];
+                if (actor.Kind != (ushort)EntityKind.Player && actor.Kind != (ushort)EntityKind.Worker) continue;
 
-                Fix px = player.FixX;
-                Fix py = player.FixY + PlayerCenterY;
-                var inv = sim.Inventories.GetOrCreate(player.Id);
+                Fix px = actor.FixX;
+                Fix py = actor.FixY + PlayerCenterY;
+                var inv = sim.Inventories.GetOrCreate(actor.Id);
 
                 for (int j = 0; j < entities.Count; j++)
                 {

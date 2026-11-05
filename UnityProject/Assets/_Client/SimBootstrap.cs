@@ -97,6 +97,14 @@ namespace Sim.Client
             }
         }
 
+        /// <summary>找 x 列地表上方的可站立格 Y（小人出生用，与 SpawnDefaultPlayer 同逻辑）。</summary>
+        private static int SpawnGroundY(Simulation sim, int x)
+        {
+            int y = 16;
+            while (y > -20 && !sim.IsSolid(new GridPos(x, y - 1))) y--;
+            return y;
+        }
+
         /// <summary>把当前 _sim 绑定到渲染/输入（开新局与读档共用）。</summary>
         private void BindSimulation()
         {
@@ -110,6 +118,8 @@ namespace Sim.Client
         private Simulation BuildSimulation(ulong worldSeed)
         {
             var sim = new Simulation(worldSeed, _defs.TileRules, _defs.Recipes.ToArray(), _defs.Global);
+            // 注册顺序 = 每 tick 执行顺序（确定性约束）：JobSystem 先写小人输入，物理后消费
+            sim.RegisterSystem(new JobSystem());
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
@@ -126,6 +136,9 @@ namespace Sim.Client
 
             // 出生点：世界初始化阶段生成（确定性 setup，与回放一致）
             _playerId = WorldGen.SpawnDefaultPlayer(sim, 0);
+
+            // 开局自带 1 个小人（M2.2：标记挖掘/自动搬运的自动化雏形）
+            sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(2, SpawnGroundY(sim, 2)), 0, 0, 0);
 
             // 初始物资（M2.1 T0–T1）：3 麦种 + 6 木料 + 3 小麦
             // + 3 煤 + 2 铜矿石（直接体验铜线加工）+ 2 胡萝卜种子（第二种作物）
@@ -218,9 +231,9 @@ namespace Sim.Client
                 + "  Entities=" + _sim.Entities.Count
                 + "  WorldHash=" + _hash.ToString("X16")
                 + "  Player=#" + _playerId);
-            GUI.Label(new Rect(8, 28, 720, 20),
-                "A/D 移动  Space/W 跳跃  左键挖掘(可按住)  右键放置  1-9 切换方块"
-                + "  F 切换配方  C 在最近工作台加工  F5 存档  F9 读档");
+            GUI.Label(new Rect(8, 28, 900, 20),
+                "A/D 移动  Space/W 跳跃  W/S 梯上攀爬  左键挖掘(可按住)  右键放置  1-9 切换方块"
+                + "  F 切换配方  C 加工  X 标记挖掘(小人代办)  V 背包存入最近箱子  F5 存档  F9 读档");
             if (!string.IsNullOrEmpty(_statusMsg))
             {
                 GUI.Label(new Rect(740, 8, 520, 36), _statusMsg);
@@ -276,9 +289,23 @@ namespace Sim.Client
                 jobRow++;
             }
 
-            // 背包面板：非空槽位列表
+            // 小人任务板（M2.2：任务列表 + 执行状态）
+            int taskRow = 0;
+            for (int j = 0; j < _sim.Jobs.Count && taskRow < 4; j++)
+            {
+                var task = _sim.Jobs.Get(j);
+                string desc = task.Kind == JobKind.DigTile
+                    ? "挖掘 " + task.TargetPos
+                    : "搬运 #" + task.TargetEntityId + " → 箱 " + task.TargetPos;
+                string phase = task.Phase == 0 ? "前往" : (task.Phase == 1 ? "挖掘中" : "运送中");
+                GUI.Label(new Rect(8, 164 + taskRow * 18, 900, 18),
+                    "小人任务: " + desc + "  [" + phase + (task.WorkerId != 0 ? " 小人#" + task.WorkerId : " 待领取") + "]");
+                taskRow++;
+            }
+
+            // 背包面板：非空槽位列表（位于任务板下方）
             int row = 0;
-            int bagY = 88 + 4 * 18 + 4;
+            int bagY = 164 + 4 * 18 + 4;
             if (_sim.Inventories.TryGet(_playerId, out var bag))
             {
                 for (int i = 0; i < Inventory.SlotCount; i++)

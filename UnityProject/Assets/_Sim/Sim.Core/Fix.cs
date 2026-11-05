@@ -48,6 +48,9 @@ namespace Sim.Core
         public static bool operator <=(Fix a, Fix b) => a._raw <= b._raw;
         public static bool operator >=(Fix a, Fix b) => a._raw >= b._raw;
 
+        /// <summary>绝对值（M2.2 JobSystem 卡住检测用）。</summary>
+        public static Fix Abs(Fix a) => new Fix(a._raw < 0 ? -a._raw : a._raw);
+
         /// <summary>转 float（仅供表现层：渲染/调试显示。禁止参与模拟运算）。</summary>
         public float ToFloat() => (float)_raw / OneRaw;
 

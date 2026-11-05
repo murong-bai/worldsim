@@ -138,7 +138,9 @@ namespace Sim.Data
                 ItemIdOf(defs, tile.GetString("placeItem", null), context),
                 tile.GetInt("placeCount", 1),
                 tile.GetBool("workbench", false),
-                tile.GetBool("needsSupport", false));
+                tile.GetBool("needsSupport", false),
+                tile.GetBool("isLadder", false),
+                tile.GetBool("isContainer", false));
         }
 
         /// <summary>world.json → GlobalDef（全局模拟参数）。数值即模拟输入，异常值尽早抛出。</summary>

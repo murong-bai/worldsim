@@ -34,6 +34,20 @@ namespace Sim.Commands
             // 挖掉工作台：进行中的加工任务作废（材料是否返还待 M2 决策）
             sim.Crafting.TryCancel(Pos);
 
+            // 挖掉容器（箱子）：内容物全部弹出掉落物（M2.2）
+            var contents = sim.Containers.Remove(Pos);
+            if (contents != null)
+            {
+                for (int i = 0; i < Inventory.SlotCount; i++)
+                {
+                    if (contents.ItemIds[i] != 0 && contents.Counts[i] > 0)
+                    {
+                        sim.Entities.Spawn((ushort)EntityKind.DroppedItem, Pos,
+                            contents.ItemIds[i], contents.Counts[i], 0);
+                    }
+                }
+            }
+
             if (rule.GrowthTicks > 0)
             {
                 // 作物：成熟收获 = 产物×2 + 种子×1（种子 = placeItem，可持续种植）；

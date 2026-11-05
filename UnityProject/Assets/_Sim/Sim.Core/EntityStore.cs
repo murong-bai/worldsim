@@ -38,6 +38,7 @@ namespace Sim.Core
         public Fix Vy;
         public byte MoveInput;  // 0=无 1=左 2=右
         public byte JumpInput;  // 0=无 1=跳
+        public byte ClimbInput; // 0=无 1=上 2=下（梯子上生效；Worker 寻路亦写此字段）
         public byte Grounded;   // 0/1
     }
 
@@ -107,12 +108,13 @@ namespace Sim.Core
             _entities[id] = e;
         }
 
-        /// <summary>写入玩家输入状态（移动方向 + 跳跃键）。</summary>
-        public void SetPlayerInput(int id, byte moveInput, byte jumpInput)
+        /// <summary>写入角色输入状态（移动方向 + 跳跃 + 攀爬）。Player 由命令驱动，Worker 由 JobSystem 驱动。</summary>
+        public void SetPlayerInput(int id, byte moveInput, byte jumpInput, byte climbInput)
         {
             if (!_entities.TryGetValue(id, out var e)) return;
             e.MoveInput = moveInput;
             e.JumpInput = jumpInput;
+            e.ClimbInput = climbInput;
             _entities[id] = e;
         }
 
@@ -170,6 +172,7 @@ namespace Sim.Core
                 h.Update(e.Vy.Raw);
                 h.Update(e.MoveInput);
                 h.Update(e.JumpInput);
+                h.Update(e.ClimbInput);
                 h.Update(e.Grounded);
             }
         }

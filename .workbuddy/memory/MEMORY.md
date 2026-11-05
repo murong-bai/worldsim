@@ -20,11 +20,11 @@
 
 **基准文档**：docs/GDD.md（v0.3，2026-11-05，M2 规划冻结含 §4.1 细化拆解；§4 已标 M1 ✅）——重大决策变更需更新此文档并记录版本。
 
-**工程状态（2026-11-05）**：M1 完成 ✅ + **M2.0 技术清债完成 ✅**（提交 `bf8e45d` 已推送）——全局参数数据驱动（GlobalDef + world.json：跨度 6/世界 -256..255 共 512 格 16 chunk）、自动存档（客户端每 3000 tick 覆盖单槽）、相机水平钳制。测试 **84/84**；哈希基准：确定性 `75F4C70DE68B2F55`、回放 `A36E1F63C035FEE2`（世界扩 512 格所致，属预期）。GlobalDef.cs/world.json 的 .meta 待用户开 Unity 后补提交。远端仓库 `https://github.com/murong-bai/worldsim`（GitHub 账号 murong-bai）。下一步：M2.1 内容 T0–T1（石/木/食物三线 + 铜煤矿脉，验收=零核心代码改动）→ M2.2 小人任务 AI（确定性 A*，无跳跃）→ M2.3 电力。
+**工程状态（2026-11-05）**：M1 ✅ + **M2.0 ✅ + M2.1 ✅**（最新提交 `12a882a` 已推送）——全局参数/矿脉 world.json 数据驱动（Ores：tile/chancePerMille/yTop/yBottom，加矿种纯 JSON）、世界 512 格、自动存档（3000 tick）、相机钳制、铜/食物/石砖产线内容（13 方块/13 物品/4 配方）、初始物资含煤/铜矿/胡萝卜种子。测试 **92/92**；哈希基准：报告 hash@1200 `140A9A66AB331E4E`。远端仓库 `https://github.com/murong-bai/worldsim`（GitHub 账号 murong-bai）。下一步：**M2.2 小人任务 AI**（确定性 A* 无跳跃：平地/爬梯/跨 1 格〔梯子 tile 待新增〕；任务板；复用 PlayerMovementSystem；验收 = 小人闭环 挖→拾→搬运→入箱；容器「箱子」也待新增）→ M2.3 电力。
 
 **git 推送要点（本机网络特殊，重要）**：本机走 Watt Toolkit（SteamTools）系统代理（127.0.0.1:26561，**端口可能随重启变化**，失效时查注册表 `HKCU\...\Internet Settings\ProxyServer`），对 HTTPS 做 MITM。git 需 OpenSSL 后端 + 信任 SteamTools 根证书（`steamtools-root.pem` 在工作区根目录、已 gitignore），三参数已写入**仓库本地 git config**（http.proxy / http.sslBackend / http.sslCAInfo）——config 优先级高于环境变量，所以 agent shell 里直接 `git push` 也能通。推送授权已缓存（GCM）。`api.github.com` 不被 Watt Toolkit 加速（查询 CI 状态用浏览器看 Actions 页）。仓库 git 身份：muron / muron@local。
 
-**开发规范**：跑测试：`dotnet run --project tests/SimHarness`（本机 bash 需用全路径 `/c/Program Files/dotnet/dotnet.exe`）；报告模式：`dotnet run --project tests/SimHarness -- report [路径]`（固定剧本四路径哈希，ASCII/LF/UTF-8 无 BOM 可跨平台 diff）。CI：`.github/workflows/ci.yml`（ubuntu+windows 矩阵 + compare job diff 报告）；本机 WSL 被安全策略黑名单拦截，Linux 端验证靠 CI。命令行格式 `tick|type|args`（CommandCodec），新命令必须注册进 Codec。改动模拟逻辑后必须重跑 harness；提交说明需记录哈希变化（当前基准 M2.0 后：确定性 `75F4C70D…`、回放 `A36E1F63…`；历史：M1 收官 `35C39936…`/`66672E7D…` → M2.0 世界扩 512 格变更）。
+**开发规范**：跑测试：`dotnet run --project tests/SimHarness`（本机 bash 需用全路径 `/c/Program Files/dotnet/dotnet.exe`）；报告模式：`dotnet run --project tests/SimHarness -- report [路径]`（固定剧本四路径哈希，ASCII/LF/UTF-8 无 BOM 可跨平台 diff）。CI：`.github/workflows/ci.yml`（ubuntu+windows 矩阵 + compare job diff 报告）；本机 WSL 被安全策略黑名单拦截，Linux 端验证靠 CI。命令行格式 `tick|type|args`（CommandCodec），新命令必须注册进 Codec。改动模拟逻辑后必须重跑 harness；提交说明需记录哈希变化（当前基准 M2.1 后：报告 hash@1200 `140A9A66…`；历史：M1 `35C39936…`/`66672E7D…` → M2.0 `75F4C70D…`/`A36E1F63…` → M2.1 `140A9A66…`）。
 
 **各系统实现要点**：
 - 角色操控：客户端仅按键变化时发 `SetPlayerInputCommand`，物理全在 `PlayerMovementSystem`（Fix 定点、X/Y 碰撞、平台单向支撑）；挖/放命令带 `ByEntityId` 走射程校验（5.5 格）——联机权威端校验同构。实体位置唯一权威源 `FixX/FixY`（X=碰撞盒中心，Y=底边），`Pos` 派生。

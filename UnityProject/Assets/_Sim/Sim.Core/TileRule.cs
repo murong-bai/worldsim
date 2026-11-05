@@ -16,10 +16,13 @@ namespace Sim.Core
         public readonly int RequiredItemCount; // 放置所需数量（默认 1）
         public readonly bool IsWorkbench;      // 加工设施：craft 命令的目标
         public readonly bool NeedsSupport;     // 受结构支撑规则约束（platform 类）
+        public readonly bool IsLadder;         // 可攀爬（垂直移动媒介，GDD §2.3 决议 #6）
+        public readonly bool IsContainer;      // 容器（箱子）：deposit 命令的目标
 
         public TileRule(bool solid, bool placeable, bool blocksItems, ushort dropItemId,
             ushort harvestItemId, int growthTicks, ushort requiredItemId,
-            int requiredItemCount, bool isWorkbench, bool needsSupport)
+            int requiredItemCount, bool isWorkbench, bool needsSupport,
+            bool isLadder, bool isContainer)
         {
             Solid = solid;
             Placeable = placeable;
@@ -31,6 +34,8 @@ namespace Sim.Core
             RequiredItemCount = requiredItemCount;
             IsWorkbench = isWorkbench;
             NeedsSupport = needsSupport;
+            IsLadder = isLadder;
+            IsContainer = isContainer;
         }
     }
 

@@ -34,12 +34,15 @@ namespace Sim.Commands
                 (c, args) => { AddPos(args, c.Pos); AddInt(args, c.ByEntityId); });
 
             Register<SetPlayerInputCommand>("set_player_input",
-                a => new SetPlayerInputCommand(ParseInt(a[0]), ParseByte(a[1]), ParseByte(a[2])),
+                // M2.2 加入第 4 参数 climb；旧存档（3 参数）缺省 0，向后兼容
+                a => new SetPlayerInputCommand(ParseInt(a[0]), ParseByte(a[1]), ParseByte(a[2]),
+                    a.Length > 3 ? ParseByte(a[3]) : (byte)0),
                 (c, args) =>
                 {
                     AddInt(args, c.EntityId);
                     AddByte(args, c.MoveInput);
                     AddByte(args, c.JumpInput);
+                    AddByte(args, c.ClimbInput);
                 });
 
             Register<SpawnEntityCommand>("spawn_entity",
@@ -69,6 +72,18 @@ namespace Sim.Commands
                     args.Add(c.RecipeId);
                     AddInt(args, c.ByEntityId);
                 });
+
+            Register<DepositCommand>("deposit",
+                a => new DepositCommand(ParsePos(a[0], a[1]), ParseInt(a[2])),
+                (c, args) =>
+                {
+                    AddPos(args, c.Pos);
+                    AddInt(args, c.ByEntityId);
+                });
+
+            Register<MarkDigCommand>("mark_dig",
+                a => new MarkDigCommand(ParsePos(a[0], a[1])),
+                (c, args) => { AddPos(args, c.Pos); });
         }
 
         private static void Register<TCommand>(string typeName, Func<string[], TCommand> decode, Action<TCommand, List<string>> encode)
