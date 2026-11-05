@@ -82,10 +82,33 @@ namespace Sim.Client
             }
         }
 
-        /// <summary>射程内最近的工作台（无则 null）。</summary>
+        /// <summary>射程内最近的工作台（普通台 + 电动台，按 IsWorkbench 规则匹配）。</summary>
         public GridPos? NearestWorkbench
         {
-            get { return NearestTile(_workbenchTileId); }
+            get
+            {
+                if (!_sim.Entities.TryGet(_playerId, out var p)) return null;
+                GridPos? best = null;
+                int bestDistSq = int.MaxValue;
+                for (int dy = -6; dy <= 6; dy++)
+                {
+                    for (int dx = -6; dx <= 6; dx++)
+                    {
+                        var pos = new GridPos(p.Pos.X + dx, p.Pos.Y + dy);
+                        ushort tile = _sim.World.GetTile(pos);
+                        if (tile == 0 || tile >= _defs.TileRules.Length) continue;
+                        if (!_defs.TileRules[tile].IsWorkbench) continue;
+                        if (!_sim.WithinReach(_playerId, pos)) continue;
+                        int distSq = dx * dx + dy * dy;
+                        if (distSq < bestDistSq)
+                        {
+                            bestDistSq = distSq;
+                            best = pos;
+                        }
+                    }
+                }
+                return best;
+            }
         }
 
         /// <summary>
@@ -166,7 +189,7 @@ namespace Sim.Client
             }
         }
 
-        /// <summary>X 标记/取消挖掘任务；V 把背包倒入射程内最近箱子。</summary>
+        /// <summary>X 标记/取消挖掘任务；V 把背包倒入射程内最近箱子；E 给射程内最近燃煤发电机加一份煤。</summary>
         private void HandleJobCommands()
         {
             if (Input.GetKeyDown(KeyCode.X))
@@ -181,6 +204,41 @@ namespace Sim.Client
                     _sim.EnqueueCommand(new DepositCommand(chest.Value, _playerId));
                 }
             }
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                var gen = NearestFuelGenerator();
+                if (gen.HasValue)
+                {
+                    _sim.EnqueueCommand(new FuelCommand(gen.Value, _playerId));
+                }
+            }
+        }
+
+        /// <summary>射程内最近的燃煤发电机（无燃料型发电机不需要加煤）。</summary>
+        private GridPos? NearestFuelGenerator()
+        {
+            if (!_sim.Entities.TryGet(_playerId, out var p)) return null;
+            GridPos? best = null;
+            int bestDistSq = int.MaxValue;
+            for (int dy = -6; dy <= 6; dy++)
+            {
+                for (int dx = -6; dx <= 6; dx++)
+                {
+                    var pos = new GridPos(p.Pos.X + dx, p.Pos.Y + dy);
+                    ushort tile = _sim.World.GetTile(pos);
+                    if (tile == 0 || tile >= _defs.TileRules.Length) continue;
+                    var rule = _defs.TileRules[tile];
+                    if (rule.PowerGenW <= 0 || rule.FuelItemId == 0) continue;
+                    if (!_sim.WithinReach(_playerId, pos)) continue;
+                    int distSq = dx * dx + dy * dy;
+                    if (distSq < bestDistSq)
+                    {
+                        bestDistSq = distSq;
+                        best = pos;
+                    }
+                }
+            }
+            return best;
         }
 
         /// <summary>射程内最近的目标类方块（工作台/箱子共用扫描）。</summary>

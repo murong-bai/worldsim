@@ -124,6 +124,7 @@ namespace Sim.Client
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
             sim.RegisterSystem(new CropGrowthSystem());
+            sim.RegisterSystem(new PowerSystem());      // M2.3：先于 Crafting 结算电网
             sim.RegisterSystem(new CraftingSystem());
 
             WorldGen.GenerateTerrain(sim, new KnownTiles
@@ -140,8 +141,9 @@ namespace Sim.Client
             // 开局自带 1 个小人（M2.2：标记挖掘/自动搬运的自动化雏形）
             sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(2, SpawnGroundY(sim, 2)), 0, 0, 0);
 
-            // 初始物资（M2.1 T0–T1）：3 麦种 + 6 木料 + 3 小麦
+            // 初始物资（M2.1 T0–T1 + M2.3）：3 麦种 + 6 木料 + 3 小麦
             // + 3 煤 + 2 铜矿石（直接体验铜线加工）+ 2 胡萝卜种子（第二种作物）
+            // + 2 铜锭（电线/电动台起步，补 1 锭需走挖铜→冶炼循环）
             var startInv = sim.Inventories.GetOrCreate(_playerId);
             startInv.AddItem(_defs.ItemIds["wheat_seed"], 3);
             startInv.AddItem(_defs.ItemIds["wood"], 6);
@@ -149,6 +151,7 @@ namespace Sim.Client
             startInv.AddItem(_defs.ItemIds["coal"], 3);
             startInv.AddItem(_defs.ItemIds["copper_ore"], 2);
             startInv.AddItem(_defs.ItemIds["carrot_seed"], 2);
+            startInv.AddItem(_defs.ItemIds["copper_ingot"], 2);
             return sim;
         }
 
@@ -233,7 +236,7 @@ namespace Sim.Client
                 + "  Player=#" + _playerId);
             GUI.Label(new Rect(8, 28, 900, 20),
                 "A/D 移动  Space/W 跳跃  W/S 梯上攀爬  左键挖掘(可按住)  右键放置  1-9 切换方块"
-                + "  F 切换配方  C 加工  X 标记挖掘(小人代办)  V 背包存入最近箱子  F5 存档  F9 读档");
+                + "  F 切换配方  C 加工  X 标记挖掘(小人代办)  V 背包存入最近箱子  E 给发电机加煤  F5 存档  F9 读档");
             if (!string.IsNullOrEmpty(_statusMsg))
             {
                 GUI.Label(new Rect(740, 8, 520, 36), _statusMsg);
@@ -287,6 +290,19 @@ namespace Sim.Client
                     "加工中: " + RecipeLabel(jobRecipe) + " @ " + jobPos
                     + "  进度 " + (total - job.RemainingTicks) + "/" + total);
                 jobRow++;
+            }
+
+            // 电网络面板（M2.3：每网供/需瓦数 + 供电状态；断电可观察因果）
+            var grids = _sim.PowerState.Grids;
+            for (int g = 0; g < grids.Count && g < 4; g++)
+            {
+                var grid = grids[g];
+                string status = grid.Powered
+                    ? (grid.DemandW > 0 ? "供电中" : "待机")
+                    : "断电! 供<需";
+                GUI.Label(new Rect(500, 88 + g * 18, 420, 18),
+                    "电网@" + grid.Anchor + ": 供 " + grid.SupplyW + "W / 需 " + grid.DemandW
+                    + "W  节点 " + grid.NodeCount + "  [" + status + "]");
             }
 
             // 小人任务板（M2.2：任务列表 + 执行状态）

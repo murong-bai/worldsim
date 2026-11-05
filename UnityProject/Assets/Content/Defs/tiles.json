@@ -13,5 +13,9 @@
   { "id": "copper_ore", "solid": true, "placeable": false, "dropItem": "copper_ore", "color": "#C07848" },
   { "id": "carrot_crop", "solid": false, "placeable": true, "placeItem": "carrot_seed", "growthTicks": 180, "harvestItem": "carrot", "color": "#E8823A" },
   { "id": "ladder", "solid": false, "placeable": true, "dropItem": "wood", "placeItem": "wood", "isLadder": true, "color": "#C8B26A" },
-  { "id": "chest", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "isContainer": true, "color": "#A0784A" }
+  { "id": "chest", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "isContainer": true, "color": "#A0784A" },
+  { "id": "wire", "solid": false, "placeable": true, "dropItem": "copper_ingot", "placeItem": "copper_ingot", "isWire": true, "color": "#E8B33A" },
+  { "id": "coal_generator", "solid": true, "placeable": true, "dropItem": "stone_bricks", "placeItem": "stone_bricks", "placeCount": 4, "powerGenW": 100, "fuelItem": "coal", "fuelTicks": 600, "color": "#4A4E55" },
+  { "id": "hand_crank", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 4, "powerGenW": 60, "color": "#7A8C5A" },
+  { "id": "electric_workbench", "solid": true, "placeable": true, "dropItem": "copper_ingot", "placeItem": "copper_ingot", "placeCount": 3, "workbench": true, "powerDrawW": 60, "craftSpeed": 3, "color": "#4FC3D9" }
 ]

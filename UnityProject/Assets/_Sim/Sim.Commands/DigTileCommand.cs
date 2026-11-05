@@ -36,6 +36,9 @@ namespace Sim.Commands
 
             // 挖掉容器（箱子）：内容物全部弹出掉落物（M2.2）
             var contents = sim.Containers.Remove(Pos);
+
+            // 挖掉电力节点（电线/发电机/用电器）：注销注册（M2.3，拆网断电的物理来源）
+            sim.Power.Remove(Pos);
             if (contents != null)
             {
                 for (int i = 0; i < Inventory.SlotCount; i++)

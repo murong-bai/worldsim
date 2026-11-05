@@ -84,6 +84,10 @@ namespace Sim.Commands
             Register<MarkDigCommand>("mark_dig",
                 a => new MarkDigCommand(ParsePos(a[0], a[1])),
                 (c, args) => { AddPos(args, c.Pos); });
+
+            Register<FuelCommand>("fuel",
+                a => new FuelCommand(ParsePos(a[0], a[1]), ParseInt(a[2])),
+                (c, args) => { AddPos(args, c.Pos); AddInt(args, c.ByEntityId); });
         }
 
         private static void Register<TCommand>(string typeName, Func<string[], TCommand> decode, Action<TCommand, List<string>> encode)

@@ -24,6 +24,10 @@ namespace Sim.Core
         public readonly GlobalDef Global;
         public readonly ContainerStore Containers;
         public readonly JobBoard Jobs;
+        /// <summary>电力节点注册表（M2.3，入哈希）；每 tick 结算结果见 PowerState。</summary>
+        public readonly PowerStore Power;
+        /// <summary>本 tick 电网结算结果（派生数据不入哈希，由 PowerSystem 每 tick 重建）。</summary>
+        public readonly PowerState PowerState;
 
         private readonly List<ISimSystem> _systems = new List<ISimSystem>();
         private readonly Dictionary<string, int> _recipeIndexById = new Dictionary<string, int>();
@@ -46,6 +50,8 @@ namespace Sim.Core
             Commands = new CommandQueue();
             Containers = new ContainerStore();
             Jobs = new JobBoard();
+            Power = new PowerStore();
+            PowerState = new PowerState();
         }
 
         /// <summary>注册顺序 = 每 tick 的执行顺序（确定性约束）。</summary>
@@ -130,6 +136,7 @@ namespace Sim.Core
             Crafting.HashInto(ref h);
             Containers.HashInto(ref h);
             Jobs.HashInto(ref h);
+            Power.HashInto(ref h);
             return h.Value;
         }
     }

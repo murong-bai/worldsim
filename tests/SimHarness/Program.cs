@@ -55,6 +55,7 @@ namespace SimHarness
             TestStructuralSupport();
             TestM2Content();
             TestM22();
+            TestM23();
             TestDeterminism();
             TestReplay();
             TestSaveLoad();
@@ -89,6 +90,7 @@ namespace SimHarness
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
             sim.RegisterSystem(new CropGrowthSystem());
+            sim.RegisterSystem(new PowerSystem());     // M2.3：先于 Crafting 结算电网
             sim.RegisterSystem(new CraftingSystem());
             WorldGen.GenerateTerrain(sim, KnownOf(defs));
             int pid = WorldGen.SpawnDefaultPlayer(sim, 0);   // 玩家实体 Id 恒为 1（首个实体）
@@ -96,7 +98,7 @@ namespace SimHarness
             // 开局自带 1 个小人（M2.2：自动化雏形；雇佣经济系统后续版本）
             sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(2, SpawnGroundY(sim, 2)), 0, 0, 0);
 
-            // 初始物资（与客户端 SimBootstrap 一致：3 麦种 + 6 木料 + 3 小麦 + 3 煤 + 2 铜矿石 + 2 胡萝卜种子）
+            // 初始物资（与客户端 SimBootstrap 一致：3 麦种 + 6 木料 + 3 小麦 + 3 煤 + 2 铜矿石 + 2 胡萝卜种子 + 2 铜锭）
             var inv = sim.Inventories.GetOrCreate(pid);
             inv.AddItem(defs.ItemIds["wheat_seed"], 3);
             inv.AddItem(defs.ItemIds["wood"], 6);
@@ -104,6 +106,7 @@ namespace SimHarness
             inv.AddItem(defs.ItemIds["coal"], 3);
             inv.AddItem(defs.ItemIds["copper_ore"], 2);
             inv.AddItem(defs.ItemIds["carrot_seed"], 2);
+            inv.AddItem(defs.ItemIds["copper_ingot"], 2);
             return sim;
         }
 
@@ -137,7 +140,7 @@ namespace SimHarness
         private static void TestDefLoading()
         {
             var defs = LoadDefs();
-            Check(defs.TileRules.Length == 15, "Defs: 方块数量 = 15");
+            Check(defs.TileRules.Length == 19, "Defs: 方块数量 = 19");
             Check(defs.TileIds["air"] == 0, "Defs: air 固定为 0");
             Check(defs.TileRules[defs.TileIds["stone"]].Solid, "Defs: stone 为固体");
             var platform = defs.TileRules[defs.TileIds["platform"]];
@@ -294,6 +297,7 @@ namespace SimHarness
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
             sim.RegisterSystem(new CropGrowthSystem());
+            sim.RegisterSystem(new PowerSystem());     // M2.3：先于 Crafting 结算电网
             sim.RegisterSystem(new CraftingSystem());
             for (int x = -16; x <= 48; x++)
             {
@@ -472,8 +476,9 @@ namespace SimHarness
                 && startInv.CountOf(defs.ItemIds["wheat"]) == 3
                 && startInv.CountOf(defs.ItemIds["coal"]) == 3
                 && startInv.CountOf(defs.ItemIds["copper_ore"]) == 2
-                && startInv.CountOf(defs.ItemIds["carrot_seed"]) == 2,
-                "背包: 新玩家初始物资（麦种/木料/小麦/煤/铜矿石/胡萝卜种子）");
+                && startInv.CountOf(defs.ItemIds["carrot_seed"]) == 2
+                && startInv.CountOf(defs.ItemIds["copper_ingot"]) == 2,
+                "背包: 新玩家初始物资（麦种/木料/小麦/煤/铜矿石/胡萝卜种子/铜锭）");
         }
 
         private static int CountDropped(Simulation sim)
@@ -1087,6 +1092,244 @@ namespace SimHarness
                     "M2.2: 小人拾取掉落物存入箱子（闭环完成）");
                 Check(finalJobs == 0 && workerInv != null && TotalInvCount(workerInv) == 0,
                     "M2.2: 任务清空、小人背包清空");
+            }
+        }
+
+        private static void TestM23()
+        {
+            var defs = LoadDefs();
+
+            // ---------- 1) Defs 电力参数解析 ----------
+            {
+                var wire = defs.TileRules[defs.TileIds["wire"]];
+                var gen = defs.TileRules[defs.TileIds["coal_generator"]];
+                var crank = defs.TileRules[defs.TileIds["hand_crank"]];
+                var ebench = defs.TileRules[defs.TileIds["electric_workbench"]];
+                Check(wire.IsWire && !wire.IsContainer
+                    && gen.PowerGenW == 100 && gen.FuelItemId == defs.ItemIds["coal"] && gen.FuelTicksPerItem == 600
+                    && crank.PowerGenW == 60 && crank.FuelItemId == 0
+                    && ebench.PowerDrawW == 60 && ebench.CraftSpeed == 3 && ebench.IsWorkbench,
+                    "M2.3: 电力方块定义解析（电线/燃煤机/人力机/电动台）");
+            }
+
+            // ---------- 2) 放置注册 / 挖除注销 ----------
+            {
+                var sim = BuildRunwaySim(defs, 801);
+                sim.World.SetTile(new GridPos(10, 1), 0); // 确保空（跑道上方本就是空气，防御）
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(10, 1), defs.TileIds["coal_generator"]));
+                sim.Step();
+                Check(sim.Power.Count == 1, "M2.3: 发电机放置即注册电力节点");
+                sim.EnqueueCommand(new DigTileCommand(new GridPos(10, 1)));
+                sim.Step();
+                Check(sim.Power.Count == 0, "M2.3: 挖除发电机注销电力节点");
+            }
+
+            // ---------- 3) 人力发电 + 电动台加工（速度 x3） ----------
+            {
+                var sim = BuildRunwaySim(defs, 802);
+                ushort crank = defs.TileIds["hand_crank"];
+                ushort wire = defs.TileIds["wire"];
+                ushort ebench = defs.TileIds["electric_workbench"];
+                // crank(10) - wire(11) - bench(12)；Worker 站 crank 旁发电
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(10, 1), crank));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(11, 1), wire));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(12, 1), ebench));
+                sim.Step();
+                int worker = sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(9, 1), 0, 0, 0);
+                int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(13, 1), 0, 0, 0);
+                sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["wheat"], 3);
+
+                // 断电时（Worker 未就位前不会发生——Worker 出生即邻；这里先验证供电网状态）
+                sim.Step();
+                Check(sim.PowerState.Grids.Count == 1 && sim.PowerState.Grids[0].SupplyW == 60
+                    && sim.PowerState.Grids[0].DemandW == 0 && sim.PowerState.Grids[0].Powered,
+                    "M2.3: 人力机紧邻 Worker 即发电（60W 电网）");
+
+                sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                // 命令当 tick 即推进 3（命令先于系统执行），craftTicks 30、speed 3 → 10 tick 完成
+                for (int i = 0; i < 8; i++) sim.Step();
+                Check(sim.Crafting.Count == 1, "M2.3: 供电中任务推进（9 tick 未完，剩 3）");
+                sim.Step();
+                sim.Step();   // Pickup 在 Crafting 之前执行：产物落地后下一 tick 才被拾取
+                Check(sim.Crafting.Count == 0
+                    && sim.Inventories.GetOrCreate(player).CountOf(defs.ItemIds["bread"]) >= 1,
+                    "M2.3: 电动台 x3 速度：30 tick 配方 10 tick 完成");
+            }
+
+            // ---------- 4) 无电工作台照常、孤立电动台断电停产 ----------
+            {
+                var sim = BuildRunwaySim(defs, 803);
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(12, 1), defs.TileIds["electric_workbench"]));
+                sim.Step();
+                int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(13, 1), 0, 0, 0);
+                sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["wheat"], 3);
+                sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                CraftJob job;
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                int remaining0 = job.RemainingTicks;
+                for (int i = 0; i < 60; i++) sim.Step();
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                Check(sim.Crafting.Count == 1 && job.RemainingTicks == remaining0,
+                    "M2.3: 无电网电动台断电停产（进度冻结）");
+            }
+
+            // ---------- 5) 拆线断电 → 接回复产（进度保留） ----------
+            {
+                var sim = BuildRunwaySim(defs, 804);
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(10, 1), defs.TileIds["hand_crank"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(11, 1), defs.TileIds["wire"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(12, 1), defs.TileIds["electric_workbench"]));
+                sim.Step();
+                sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(9, 1), 0, 0, 0);
+                int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(13, 1), 0, 0, 0);
+                sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["wheat"], 3);
+                sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                for (int i = 0; i < 4; i++) sim.Step();   // 推进 12/30
+
+                // 挖断中间电线 → 电网分裂，电动台失电
+                sim.EnqueueCommand(new DigTileCommand(new GridPos(11, 1)));
+                sim.Step();
+                Check(sim.PowerState.Grids.Count == 2, "M2.3: 挖断电线 → 电网分裂为 2");
+                CraftJob job;
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                int frozen = job.RemainingTicks;
+                for (int i = 0; i < 30; i++) sim.Step();
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                Check(job.RemainingTicks == frozen, "M2.3: 拆线断电期间任务冻结");
+
+                // 接回电线 → 复电续产并完成
+                sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["copper_ingot"], 1);
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(11, 1), defs.TileIds["wire"]) { ByEntityId = player });
+                sim.Step();
+                for (int i = 0; i < 15; i++) sim.Step();
+                Check(sim.Crafting.Count == 0
+                    && sim.Inventories.GetOrCreate(player).CountOf(defs.ItemIds["bread"]) >= 1,
+                    "M2.3: 接回电线复电续产（进度保留直达完成）");
+            }
+
+            // ---------- 6) 燃煤机：加煤校验 / 燃烧 / 燃尽停产 / 再加煤复产 ----------
+            {
+                var sim = BuildRunwaySim(defs, 805);
+                var genPos = new GridPos(10, 1);
+                sim.EnqueueCommand(new PlaceTileCommand(genPos, defs.TileIds["coal_generator"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(11, 1), defs.TileIds["wire"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(12, 1), defs.TileIds["electric_workbench"]));
+                sim.Step();
+                int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(13, 1), 0, 0, 0);
+                var inv = sim.Inventories.GetOrCreate(player);
+                inv.AddItem(defs.ItemIds["coal"], 5);
+
+                // 校验拒绝：目标非发电机 / 无煤（先清空）
+                sim.EnqueueCommand(new FuelCommand(new GridPos(12, 1), player));
+                sim.Step();
+                PowerNode node;
+                Check(!sim.Power.TryGet(genPos, out node) || node.FuelTicks == 0,
+                    "M2.3: 加煤拒绝——目标非发电机");
+
+                inv.TryConsume(defs.ItemIds["coal"], 5);
+                sim.EnqueueCommand(new FuelCommand(genPos, player));
+                sim.Step();
+                sim.Power.TryGet(genPos, out node);
+                Check(node.FuelTicks == 0 && inv.CountOf(defs.ItemIds["coal"]) == 0,
+                    "M2.3: 加煤拒绝——背包无煤（无副作用）");
+
+                // 正常加煤 + 燃料上限 3 份
+                inv.AddItem(defs.ItemIds["coal"], 5);
+                sim.EnqueueCommand(new FuelCommand(genPos, player));
+                sim.EnqueueCommand(new FuelCommand(genPos, player));
+                sim.EnqueueCommand(new FuelCommand(genPos, player));
+                sim.EnqueueCommand(new FuelCommand(genPos, player)); // 第 4 次应被上限拒绝
+                sim.Step();
+                sim.Power.TryGet(genPos, out node);
+                Check(node.FuelTicks == 1800 && inv.CountOf(defs.ItemIds["coal"]) == 2,
+                    "M2.3: 加煤 x3 生效、第 4 份被上限拒绝（3 份 = 1800）");
+
+                // 有负荷才燃烧：无任务时燃料不消耗
+                sim.Step(); sim.Step();
+                sim.Power.TryGet(genPos, out node);
+                Check(node.FuelTicks == 1800, "M2.3: 待机不烧燃料");
+
+                // 有任务 → 燃烧推进 → 供电完成配方
+                inv.AddItem(defs.ItemIds["wheat"], 3);
+                sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                for (int i = 0; i < 12; i++) sim.Step();
+                sim.Power.TryGet(genPos, out node);
+                Check(sim.Crafting.Count == 0 && node.FuelTicks < 1800
+                    && sim.Inventories.GetOrCreate(player).CountOf(defs.ItemIds["bread"]) >= 1,
+                    "M2.3: 燃煤机带负荷燃烧并完成加工（燃料递减）");
+
+                // 人为设置少量燃料 → 燃尽 → 断电停产
+                sim.Power.SetNode(genPos, new PowerNode { TileId = defs.TileIds["coal_generator"], FuelTicks = 5 });
+                inv.AddItem(defs.ItemIds["wheat"], 3);
+                sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                for (int i = 0; i < 8; i++) sim.Step();   // 5 tick 燃尽 + 3 tick 断电
+                CraftJob job;
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                int frozen = job.RemainingTicks;
+                for (int i = 0; i < 20; i++) sim.Step();
+                sim.Crafting.TryGet(new GridPos(12, 1), out job);
+                Check(sim.Power.TryGet(genPos, out node) && node.FuelTicks == 0
+                    && job.RemainingTicks == frozen && sim.Crafting.Count == 1,
+                    "M2.3: 燃料燃尽 → 断电停产（进度冻结）");
+
+                // 再加煤 → 复产
+                sim.EnqueueCommand(new FuelCommand(genPos, player));
+                sim.Step();
+                for (int i = 0; i < 12; i++) sim.Step();
+                Check(sim.Crafting.Count == 0
+                    && sim.Inventories.GetOrCreate(player).CountOf(defs.ItemIds["bread"]) == 2,
+                    "M2.3: 补煤复电续产（第二炉完成）");
+            }
+
+            // ---------- 7) 整数瓦结算：供不应求 → 全网暂停 ----------
+            {
+                var sim = BuildRunwaySim(defs, 806);
+                // crank(48) - wire(49) - bench(50) - wire(51) - bench(52)：一网两台 120W vs 60W
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(48, 1), defs.TileIds["hand_crank"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(49, 1), defs.TileIds["wire"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(50, 1), defs.TileIds["electric_workbench"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(51, 1), defs.TileIds["wire"]));
+                sim.EnqueueCommand(new PlaceTileCommand(new GridPos(52, 1), defs.TileIds["electric_workbench"]));
+                sim.Step();
+                sim.Entities.Spawn((ushort)EntityKind.Worker, new GridPos(47, 1), 0, 0, 0);
+                int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(53, 1), 0, 0, 0);
+                var inv = sim.Inventories.GetOrCreate(player);
+                inv.AddItem(defs.ItemIds["wheat"], 6);
+                sim.EnqueueCommand(new CraftCommand(new GridPos(50, 1), "craft_bread") { ByEntityId = player });
+                sim.EnqueueCommand(new CraftCommand(new GridPos(52, 1), "craft_bread") { ByEntityId = player });
+                sim.Step();
+                Check(sim.PowerState.Grids.Count == 1 && sim.PowerState.Grids[0].SupplyW == 60
+                    && sim.PowerState.Grids[0].DemandW == 120 && !sim.PowerState.Grids[0].Powered,
+                    "M2.3: 整数瓦结算 60W < 120W → 全网断电");
+                for (int i = 0; i < 30; i++) sim.Step();
+                Check(sim.Crafting.Count == 2, "M2.3: 超载全网停产（两任务均冻结）");
+            }
+
+            // ---------- 8) 电力事件确定性：双实例同命令脚本哈希一致 ----------
+            {
+                Func<ulong, Simulation> script = seed =>
+                {
+                    var sim = BuildRunwaySim(defs, seed);
+                    sim.EnqueueCommand(new PlaceTileCommand(new GridPos(10, 1), defs.TileIds["coal_generator"]));
+                    sim.EnqueueCommand(new PlaceTileCommand(new GridPos(11, 1), defs.TileIds["wire"]));
+                    sim.EnqueueCommand(new PlaceTileCommand(new GridPos(12, 1), defs.TileIds["electric_workbench"]));
+                    sim.Step();
+                    int player = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(13, 1), 0, 0, 0);
+                    sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["coal"], 2);
+                    sim.Inventories.GetOrCreate(player).AddItem(defs.ItemIds["wheat"], 3);
+                    sim.EnqueueCommand(new FuelCommand(new GridPos(10, 1), player));
+                    sim.EnqueueCommand(new CraftCommand(new GridPos(12, 1), "craft_bread") { ByEntityId = player });
+                    sim.Step();
+                    for (int i = 0; i < 60; i++) sim.Step();
+                    return sim;
+                };
+                Check(script(807).ComputeHash() == script(807).ComputeHash(),
+                    "M2.3: 同种子同命令（加煤/加工/燃烧）双实例哈希一致");
             }
         }
 

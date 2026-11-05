@@ -128,6 +128,26 @@ namespace Sim.Data
         private static TileRule RuleOf(JsonValue tile, Defs defs, string context)
         {
             bool solid = tile.GetBool("solid", false);
+
+            bool isWire = tile.GetBool("isWire", false);
+            int powerGenW = tile.GetInt("powerGenW", 0);
+            int powerDrawW = tile.GetInt("powerDrawW", 0);
+            ushort fuelItemId = ItemIdOf(defs, tile.GetString("fuelItem", null), context);
+            int fuelTicks = tile.GetInt("fuelTicks", 0);
+            int craftSpeed = tile.GetInt("craftSpeed", 1);
+
+            // 电力参数校验（M2.3）：异常配置尽早抛出
+            if (isWire && (powerGenW != 0 || powerDrawW != 0))
+                throw new FormatException(context + ": isWire 不能与 powerGenW/powerDrawW 并存");
+            if (powerGenW < 0 || powerGenW > 100000 || powerDrawW < 0 || powerDrawW > 100000)
+                throw new FormatException(context + ": powerGenW/powerDrawW 应在 0..100000");
+            if (fuelItemId != 0 && (powerGenW <= 0 || fuelTicks < 1))
+                throw new FormatException(context + ": fuelItem 须搭配 powerGenW>0 且 fuelTicks>=1");
+            if (fuelItemId == 0 && fuelTicks != 0)
+                throw new FormatException(context + ": fuelTicks 须搭配 fuelItem");
+            if (craftSpeed < 1 || craftSpeed > 10)
+                throw new FormatException(context + ": craftSpeed 应在 1..10");
+
             return new TileRule(
                 solid,
                 tile.GetBool("placeable", false),
@@ -140,7 +160,13 @@ namespace Sim.Data
                 tile.GetBool("workbench", false),
                 tile.GetBool("needsSupport", false),
                 tile.GetBool("isLadder", false),
-                tile.GetBool("isContainer", false));
+                tile.GetBool("isContainer", false),
+                isWire,
+                powerGenW,
+                powerDrawW,
+                fuelItemId,
+                fuelTicks,
+                craftSpeed);
         }
 
         /// <summary>world.json → GlobalDef（全局模拟参数）。数值即模拟输入，异常值尽早抛出。</summary>

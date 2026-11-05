@@ -54,6 +54,12 @@ namespace Sim.Commands
             {
                 sim.Containers.GetOrCreate(Pos);
             }
+
+            // 电力节点（电线/发电机/用电器）：放置即注册（PowerSystem 据此分解电网，M2.3）
+            if (rule.IsWire || rule.PowerGenW > 0 || rule.PowerDrawW > 0)
+            {
+                sim.Power.Register(Pos, TileId);
+            }
         }
     }
 }

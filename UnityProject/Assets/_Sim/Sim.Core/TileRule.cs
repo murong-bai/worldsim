@@ -18,11 +18,19 @@ namespace Sim.Core
         public readonly bool NeedsSupport;     // 受结构支撑规则约束（platform 类）
         public readonly bool IsLadder;         // 可攀爬（垂直移动媒介，GDD §2.3 决议 #6）
         public readonly bool IsContainer;      // 容器（箱子）：deposit 命令的目标
+        public readonly bool IsWire;           // 电线（电网连接媒介，M2.3）
+        public readonly int PowerGenW;         // 发电功率（瓦，>0 = 发电机；人力机无燃料、燃煤机烧 FuelItemId）
+        public readonly int PowerDrawW;        // 耗电功率（瓦，>0 = 用电器；断电时加工暂停）
+        public readonly ushort FuelItemId;     // 发电机燃料物品（0 = 人力发电机：紧邻 Player/Worker 即发电）
+        public readonly int FuelTicksPerItem;  // 每份燃料燃烧 tick 数（1 份 = 1 个物品）
+        public readonly int CraftSpeed;        // 工作台加工速度倍率（每 tick 递减量，默认 1；电动台更快）
 
         public TileRule(bool solid, bool placeable, bool blocksItems, ushort dropItemId,
             ushort harvestItemId, int growthTicks, ushort requiredItemId,
             int requiredItemCount, bool isWorkbench, bool needsSupport,
-            bool isLadder, bool isContainer)
+            bool isLadder, bool isContainer,
+            bool isWire, int powerGenW, int powerDrawW, ushort fuelItemId,
+            int fuelTicksPerItem, int craftSpeed)
         {
             Solid = solid;
             Placeable = placeable;
@@ -36,6 +44,12 @@ namespace Sim.Core
             NeedsSupport = needsSupport;
             IsLadder = isLadder;
             IsContainer = isContainer;
+            IsWire = isWire;
+            PowerGenW = powerGenW;
+            PowerDrawW = powerDrawW;
+            FuelItemId = fuelItemId;
+            FuelTicksPerItem = fuelTicksPerItem;
+            CraftSpeed = craftSpeed;
         }
     }
 
