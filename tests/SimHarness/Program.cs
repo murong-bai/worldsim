@@ -53,6 +53,7 @@ namespace SimHarness
             TestPickupAndInventory();
             TestCrafting();
             TestStructuralSupport();
+            TestM2Content();
             TestDeterminism();
             TestReplay();
             TestSaveLoad();
@@ -89,11 +90,14 @@ namespace SimHarness
             WorldGen.GenerateTerrain(sim, KnownOf(defs));
             int pid = WorldGen.SpawnDefaultPlayer(sim, 0);   // 玩家实体 Id 恒为 1（首个实体）
 
-            // 初始物资（与客户端 SimBootstrap 一致：3 种子 + 6 木料 + 3 小麦）
+            // 初始物资（与客户端 SimBootstrap 一致：3 麦种 + 6 木料 + 3 小麦 + 3 煤 + 2 铜矿石 + 2 胡萝卜种子）
             var inv = sim.Inventories.GetOrCreate(pid);
             inv.AddItem(defs.ItemIds["wheat_seed"], 3);
             inv.AddItem(defs.ItemIds["wood"], 6);
             inv.AddItem(defs.ItemIds["wheat"], 3);
+            inv.AddItem(defs.ItemIds["coal"], 3);
+            inv.AddItem(defs.ItemIds["copper_ore"], 2);
+            inv.AddItem(defs.ItemIds["carrot_seed"], 2);
             return sim;
         }
 
@@ -127,7 +131,7 @@ namespace SimHarness
         private static void TestDefLoading()
         {
             var defs = LoadDefs();
-            Check(defs.TileRules.Length == 9, "Defs: 方块数量 = 9");
+            Check(defs.TileRules.Length == 13, "Defs: 方块数量 = 13");
             Check(defs.TileIds["air"] == 0, "Defs: air 固定为 0");
             Check(defs.TileRules[defs.TileIds["stone"]].Solid, "Defs: stone 为固体");
             var platform = defs.TileRules[defs.TileIds["platform"]];
@@ -143,7 +147,7 @@ namespace SimHarness
             Check(workbench.IsWorkbench && workbench.Solid && workbench.Placeable
                 && workbench.RequiredItemId == defs.ItemIds["wood"] && workbench.RequiredItemCount == 2,
                 "Defs: 工作台定义（固体可放置，需木料 x2）");
-            Check(defs.ItemIds.Count == 7 && defs.Recipes.Count == 2, "Defs: 物品 7 个 / 配方 2 条");
+            Check(defs.ItemIds.Count == 13 && defs.Recipes.Count == 4, "Defs: 物品 13 个 / 配方 4 条");
 
             RecipeDef breadRecipe = null, brickRecipe = null;
             foreach (var r in defs.Recipes)
@@ -449,8 +453,11 @@ namespace SimHarness
             sim2.Inventories.TryGet(1, out var startInv);
             Check(startInv != null && startInv.CountOf(defs.ItemIds["wheat_seed"]) == 3
                 && startInv.CountOf(defs.ItemIds["wood"]) == 6
-                && startInv.CountOf(defs.ItemIds["wheat"]) == 3,
-                "背包: 新玩家初始物资 3 种子 + 6 木料 + 3 小麦");
+                && startInv.CountOf(defs.ItemIds["wheat"]) == 3
+                && startInv.CountOf(defs.ItemIds["coal"]) == 3
+                && startInv.CountOf(defs.ItemIds["copper_ore"]) == 2
+                && startInv.CountOf(defs.ItemIds["carrot_seed"]) == 2,
+                "背包: 新玩家初始物资（麦种/木料/小麦/煤/铜矿石/胡萝卜种子）");
         }
 
         private static int CountDropped(Simulation sim)
@@ -754,6 +761,124 @@ namespace SimHarness
             // 面包任务 30 tick 完成弹出（第二条 craft 因任务占用被拒，材料未扣），产物留在工作台上
             Check(simA.ComputeHash() == simB.ComputeHash() && CountDropped(simA) == 1,
                 "加工: 同种子同命令双实例哈希一致（任务/背包入哈希）");
+        }
+
+        /// <summary>M2.1 内容验证：矿脉生成（配置驱动）+ 铜锭加工链 + 胡萝卜作物链。</summary>
+        private static void TestM2Content()
+        {
+            var defs = LoadDefs();
+
+            // 1) 内容定义齐备（纯 JSON 新增，核心零改动）
+            Check(defs.TileIds.ContainsKey("coal_ore") && defs.TileIds.ContainsKey("copper_ore")
+                && defs.TileIds.ContainsKey("stone_bricks") && defs.TileIds.ContainsKey("carrot_crop")
+                && defs.ItemIds.ContainsKey("copper_ingot") && defs.ItemIds.ContainsKey("carrot_bread")
+                && defs.Recipes.Count >= 4,
+                "M2.1: 新方块/物品/配方齐备（数据驱动）");
+
+            // 2) 矿脉生成：世界内统计两种矿石，且全部落在配置深度带内；同种子双实例数量一致
+            ushort coalTile = defs.TileIds["coal_ore"];
+            ushort copperTile = defs.TileIds["copper_ore"];
+            var simA = BuildSim(0x0AC0FFEE, defs);
+            int coalA = 0, copperA = 0;
+            bool bandOk = true;
+            foreach (var chunk in simA.World.ChunksInDeterministicOrder())
+            {
+                for (int ly = 0; ly < Chunk.Size; ly++)
+                {
+                    for (int lx = 0; lx < Chunk.Size; lx++)
+                    {
+                        ushort tile = chunk.GetTile(lx, ly);
+                        if (tile == coalTile)
+                        {
+                            coalA++;
+                            int y = (chunk.Key.Cy << Chunk.Shift) + ly;
+                            if (y < -18 || y > -6) bandOk = false;
+                        }
+                        else if (tile == copperTile)
+                        {
+                            copperA++;
+                            int y = (chunk.Key.Cy << Chunk.Shift) + ly;
+                            if (y < -24 || y > -12) bandOk = false;
+                        }
+                    }
+                }
+            }
+            Check(coalA > 50 && copperA > 50, "M2.1: 矿脉生成（煤 " + coalA + " / 铜 " + copperA + " 格）");
+            Check(bandOk, "M2.1: 矿石全部位于配置深度带（煤 -6..-18、铜 -12..-24）");
+
+            var simB = BuildSim(0x0AC0FFEE, defs);
+            int coalB = 0, copperB = 0;
+            foreach (var chunk in simB.World.ChunksInDeterministicOrder())
+            {
+                for (int ly = 0; ly < Chunk.Size; ly++)
+                {
+                    for (int lx = 0; lx < Chunk.Size; lx++)
+                    {
+                        ushort tile = chunk.GetTile(lx, ly);
+                        if (tile == coalTile) coalB++;
+                        else if (tile == copperTile) copperB++;
+                    }
+                }
+            }
+            Check(coalA == coalB && copperA == copperB, "M2.1: 同种子矿脉逐格一致");
+
+            // 3) 铜锭加工链：材料 → craft_copper_ingot → 45 tick → 铜锭产出
+            var sim = BuildRunwaySim(defs, 701);
+            int pid = sim.Entities.Spawn((ushort)EntityKind.Player, new GridPos(0, 1), 0, 0, 1);
+            for (int i = 0; i < 30; i++) sim.Step();
+            var inv = sim.Inventories.GetOrCreate(pid);
+            inv.AddItem(defs.ItemIds["wood"], 2);
+            inv.AddItem(defs.ItemIds["coal"], 1);
+            inv.AddItem(defs.ItemIds["copper_ore"], 2);
+            var wb = new GridPos(2, 1);
+            sim.EnqueueCommand(new PlaceTileCommand(wb, defs.TileIds["workbench"]) { ByEntityId = pid });
+            sim.Step();
+            sim.EnqueueCommand(new CraftCommand(wb, "craft_copper_ingot") { ByEntityId = pid });
+            sim.Step();
+            Check(inv.CountOf(defs.ItemIds["copper_ore"]) == 0 && inv.CountOf(defs.ItemIds["coal"]) == 0
+                && sim.Crafting.HasJob(wb),
+                "M2.1: 铜锭任务登记并消耗铜矿石 x2 + 煤 x1");
+            for (int i = 0; i < 60; i++) sim.Step();
+            bool ingotDropped = false;
+            foreach (var e in sim.Entities.InDeterministicOrder())
+            {
+                if (e.Kind == (ushort)EntityKind.DroppedItem && e.Aux == defs.ItemIds["copper_ingot"]
+                    && e.Pos.X == wb.X && e.Pos.Y >= wb.Y && e.Pos.Y <= wb.Y + 1)
+                {
+                    ingotDropped = true; break;
+                }
+            }
+            Check(ingotDropped && !sim.Crafting.HasJob(wb), "M2.1: 铜锭 45 tick 后产出");
+
+            // 4) 石砖可放置建筑方块（placeItem 消耗链）
+            inv.AddItem(defs.ItemIds["stone_bricks"], 1);
+            var brickPos = new GridPos(5, 1);
+            sim.EnqueueCommand(new PlaceTileCommand(brickPos, defs.TileIds["stone_bricks"]) { ByEntityId = pid });
+            sim.Step();
+            Check(sim.World.GetTile(brickPos) == defs.TileIds["stone_bricks"]
+                && inv.CountOf(defs.ItemIds["stone_bricks"]) == 0,
+                "M2.1: 石砖方块放置消耗石砖 x1");
+
+            // 5) 胡萝卜链：种 → 熟 → 收（胡萝卜 x2 + 种子 x1，返还会自续种）
+            var simC = BuildSim(800, defs);
+            ushort carrotId = defs.TileIds["carrot_crop"];
+            var cpos = new GridPos(-3, 12);
+            simC.EnqueueCommand(new PlaceTileCommand(cpos, carrotId));
+            simC.Step();
+            int mature = defs.TileRules[carrotId].GrowthTicks;
+            for (int i = 0; i < (mature + 2) * CropGrowthSystem.IntervalTicks + 10; i++) simC.Step();
+            simC.EnqueueCommand(new DigTileCommand(cpos));
+            simC.Step();
+            // 收获产物为单实体带堆叠数（Aux2），按堆叠累加
+            int carrots = 0, carrotSeeds = 0;
+            foreach (var e in simC.Entities.InDeterministicOrder())
+            {
+                if (e.Kind != (ushort)EntityKind.DroppedItem) continue;
+                if (e.Pos.X != cpos.X || e.Pos.Y < cpos.Y - 4 || e.Pos.Y > cpos.Y + 1) continue;
+                if (e.Aux == defs.ItemIds["carrot"]) carrots += e.Aux2;
+                else if (e.Aux == defs.ItemIds["carrot_seed"]) carrotSeeds += e.Aux2;
+            }
+            Check(carrots == 2 && carrotSeeds == 1, "M2.1: 胡萝卜成熟收获（产物 x2 + 种子 x1）");
         }
 
         private static void TestDeterminism()

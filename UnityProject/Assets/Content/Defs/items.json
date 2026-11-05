@@ -5,5 +5,11 @@
   { "id": "wheat", "name": "小麦", "color": "#E0B94D" },
   { "id": "wheat_seed", "name": "小麦种子", "color": "#B8A04A" },
   { "id": "bread", "name": "面包", "color": "#C89F6B" },
-  { "id": "stone_bricks", "name": "石砖", "color": "#9CA3AB" }
+  { "id": "stone_bricks", "name": "石砖", "color": "#9CA3AB" },
+  { "id": "coal", "name": "煤", "color": "#3B3B42" },
+  { "id": "copper_ore", "name": "铜矿石", "color": "#C07848" },
+  { "id": "copper_ingot", "name": "铜锭", "color": "#E08D4F" },
+  { "id": "carrot", "name": "胡萝卜", "color": "#E8823A" },
+  { "id": "carrot_seed", "name": "胡萝卜种子", "color": "#7C9A3B" },
+  { "id": "carrot_bread", "name": "胡萝卜面包", "color": "#D9A05B" }
 ]

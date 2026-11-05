@@ -33,6 +33,26 @@ namespace Sim.Core
                     sim.World.SetTile(new GridPos(x, ground + 1), tiles.Tree);
                 }
             }
+
+            // 矿脉（world.json "ores" 配置驱动）：石层内按深度带逐格概率替换。
+            // 遍历序固定：矿脉按配置序 → y 自浅至深 → x 升序（确定性）。
+            // 深度分带 = 向下探索动机（浅层煤、深层铜）；新增矿种纯 JSON，零代码。
+            for (int i = 0; i < sim.Global.Ores.Count; i++)
+            {
+                var ore = sim.Global.Ores[i];
+                for (int y = ore.YTop; y >= ore.YBottom; y--)
+                {
+                    for (int x = sim.Global.WorldLeft; x <= sim.Global.WorldRight; x++)
+                    {
+                        var cell = new GridPos(x, y);
+                        if (sim.World.GetTile(cell) != tiles.Stone) continue;
+                        if (rng.NextInt(0, 1000) < ore.ChancePerMille)
+                        {
+                            sim.World.SetTile(cell, ore.TileId);
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>

@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Sim.Core
 {
     /// <summary>
@@ -24,6 +26,29 @@ namespace Sim.Core
         public int Width
         {
             get { return WorldRight - WorldLeft + 1; }
+        }
+
+        /// <summary>
+        /// 矿脉配置（world.json "ores" 数组，按数组序生成）：石层内指定深度带按概率替换为矿石。
+        /// M2.1 管线扩展：新增矿种此后纯 JSON（TileId 由 DefLoader 按字符串名解析填充）。
+        /// 深度分带 = 向下探索动机的雏形（浅层煤、深层铜）。
+        /// </summary>
+        public readonly List<OreVein> Ores = new List<OreVein>();
+
+        /// <summary>一条矿脉的生成参数。</summary>
+        public sealed class OreVein
+        {
+            /// <summary>矿石方块 ID（DefLoader 解析字符串名）。</summary>
+            public ushort TileId;
+
+            /// <summary>替换概率（千分比，按石层格逐格判定）。</summary>
+            public int ChancePerMille;
+
+            /// <summary>深度带浅端（含，绝对 Y；数值较大 = 更浅）。</summary>
+            public int YTop;
+
+            /// <summary>深度带深端（含，绝对 Y；数值较小 = 更深）。</summary>
+            public int YBottom;
         }
 
         /// <summary>缺省值 = M1 时代的硬编码常量（world.json 缺失或未传时兜底）。</summary>

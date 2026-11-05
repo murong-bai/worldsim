@@ -159,6 +159,32 @@ namespace Sim.Data
             if (g.WorldLeft % 32 != 0 || (g.WorldRight + 1) % 32 != 0)
                 throw new FormatException("world.json: worldLeft/worldRight+1 须与 32 格 chunk 对齐");
 
+            // 矿脉（可选数组）：tile 字符串名 → 数字 ID（tiles 已加载）
+            var ores = root.Get("ores");
+            if (ores != null)
+            {
+                if (ores.Type != JsonValue.Kind.Array) throw new FormatException("world.json: ores 应为数组");
+                foreach (var ore in ores.Items)
+                {
+                    string tileName = ore.GetString("tile", null);
+                    if (tileName == null) throw new FormatException("world.json[ores]: 缺 tile 字段");
+                    if (!defs.TileIds.ContainsKey(tileName))
+                        throw new FormatException("world.json[ores]: 未定义的方块 '" + tileName + "'");
+                    var vein = new GlobalDef.OreVein
+                    {
+                        TileId = defs.TileIds[tileName],
+                        ChancePerMille = ore.GetInt("chancePerMille", 0),
+                        YTop = ore.GetInt("yTop", 0),
+                        YBottom = ore.GetInt("yBottom", 0),
+                    };
+                    if (vein.ChancePerMille < 1 || vein.ChancePerMille > 500)
+                        throw new FormatException("world.json[ores]: chancePerMille 应在 1..500");
+                    if (vein.YBottom >= vein.YTop)
+                        throw new FormatException("world.json[ores]: yBottom 应深于 yTop（数值更小）");
+                    g.Ores.Add(vein);
+                }
+            }
+
             defs.Global = g;
         }
 

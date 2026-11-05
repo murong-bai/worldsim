@@ -1,4 +1,6 @@
 [
   { "id": "craft_bread", "inputs": { "wheat": 3 }, "output": "bread", "outputCount": 1, "craftTicks": 30 },
-  { "id": "craft_stone_bricks", "inputs": { "stone": 3 }, "output": "stone_bricks", "outputCount": 2, "craftTicks": 45 }
+  { "id": "craft_stone_bricks", "inputs": { "stone": 3 }, "output": "stone_bricks", "outputCount": 2, "craftTicks": 45 },
+  { "id": "craft_copper_ingot", "inputs": { "coal": 1, "copper_ore": 2 }, "output": "copper_ingot", "outputCount": 1, "craftTicks": 45 },
+  { "id": "craft_carrot_bread", "inputs": { "carrot": 2, "wheat": 2 }, "output": "carrot_bread", "outputCount": 2, "craftTicks": 30 }
 ]

@@ -127,11 +127,15 @@ namespace Sim.Client
             // 出生点：世界初始化阶段生成（确定性 setup，与回放一致）
             _playerId = WorldGen.SpawnDefaultPlayer(sim, 0);
 
-            // 初始物资：3 种子（种地）+ 6 木料（工作台×1 + 平台×4）+ 3 小麦（开局即可体验加工）
+            // 初始物资（M2.1 T0–T1）：3 麦种 + 6 木料 + 3 小麦
+            // + 3 煤 + 2 铜矿石（直接体验铜线加工）+ 2 胡萝卜种子（第二种作物）
             var startInv = sim.Inventories.GetOrCreate(_playerId);
             startInv.AddItem(_defs.ItemIds["wheat_seed"], 3);
             startInv.AddItem(_defs.ItemIds["wood"], 6);
             startInv.AddItem(_defs.ItemIds["wheat"], 3);
+            startInv.AddItem(_defs.ItemIds["coal"], 3);
+            startInv.AddItem(_defs.ItemIds["copper_ore"], 2);
+            startInv.AddItem(_defs.ItemIds["carrot_seed"], 2);
             return sim;
         }
 

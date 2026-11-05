@@ -1,5 +1,9 @@
 {
   "maxHorizontalSpan": 6,
   "worldLeft": -256,
-  "worldRight": 255
+  "worldRight": 255,
+  "ores": [
+    { "tile": "coal_ore", "chancePerMille": 25, "yTop": -6, "yBottom": -18 },
+    { "tile": "copper_ore", "chancePerMille": 20, "yTop": -12, "yBottom": -24 }
+  ]
 }

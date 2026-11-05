@@ -7,5 +7,9 @@
   { "id": "support_beam", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "color": "#8B5A3B" },
   { "id": "tree", "solid": false, "placeable": false, "dropItem": "wood", "color": "#3B7A3B" },
   { "id": "wheat_crop", "solid": false, "placeable": true, "placeItem": "wheat_seed", "growthTicks": 150, "harvestItem": "wheat", "color": "#D4A017" },
-  { "id": "workbench", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "workbench": true, "color": "#8B6F47" }
+  { "id": "workbench", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "workbench": true, "color": "#8B6F47" },
+  { "id": "stone_bricks", "solid": true, "placeable": true, "dropItem": "stone_bricks", "placeItem": "stone_bricks", "color": "#9CA3AB" },
+  { "id": "coal_ore", "solid": true, "placeable": false, "dropItem": "coal", "color": "#3B3B42" },
+  { "id": "copper_ore", "solid": true, "placeable": false, "dropItem": "copper_ore", "color": "#C07848" },
+  { "id": "carrot_crop", "solid": false, "placeable": true, "placeItem": "carrot_seed", "growthTicks": 180, "harvestItem": "carrot", "color": "#E8823A" }
 ]
