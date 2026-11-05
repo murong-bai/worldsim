@@ -17,6 +17,9 @@ namespace Sim.Data
         public Dictionary<string, ushort> ItemIds;   // 字符串 ID → 数字 ID
         public List<RecipeDef> Recipes;
 
+        /// <summary>全局模拟参数（world.json；缺省 = M1 硬编码值）。参与模拟 → 各端必须一致。</summary>
+        public GlobalDef Global = GlobalDef.Default;
+
         /// <summary>占位配色（hex "#RRGGBB"，索引与 TileNames 对齐）。仅表现层使用，模拟核心不读取。</summary>
         public string[] TileColors;
 

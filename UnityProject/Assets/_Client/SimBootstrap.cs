@@ -109,7 +109,7 @@ namespace Sim.Client
         /// <summary>模拟装配：系统注册顺序 = 每 tick 执行顺序（确定性约束，与 harness BuildSim 一致）。</summary>
         private Simulation BuildSimulation(ulong worldSeed)
         {
-            var sim = new Simulation(worldSeed, _defs.TileRules, _defs.Recipes.ToArray());
+            var sim = new Simulation(worldSeed, _defs.TileRules, _defs.Recipes.ToArray(), _defs.Global);
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
@@ -141,6 +141,10 @@ namespace Sim.Client
             if (Input.GetKeyDown(KeyCode.F9)) LoadGame();
         }
 
+        /// <summary>自动存档间隔（tick）：3000 tick = 100 秒（M2.0；防手滑忘按 F5）。</summary>
+        private const long AutoSaveIntervalTicks = 3000;
+        private long _nextAutoSaveTick = AutoSaveIntervalTicks;
+
         private void FixedUpdate()
         {
             _sim.Step();
@@ -149,6 +153,25 @@ namespace Sim.Client
             if (_sim.Tick % 30 == 0)
             {
                 _hash = _sim.ComputeHash();
+            }
+            if (_sim.Tick >= _nextAutoSaveTick)
+            {
+                AutoSave();
+                _nextAutoSaveTick = _sim.Tick + AutoSaveIntervalTicks;
+            }
+        }
+
+        /// <summary>自动存档（覆盖单槽，与手动 F5 同格式；失败不中断游戏）。</summary>
+        private void AutoSave()
+        {
+            try
+            {
+                File.WriteAllText(SavePath, SaveLoad.Serialize(_sim));
+                _statusMsg = "自动存档: tick " + _sim.Tick + " → " + SavePath;
+            }
+            catch (Exception ex)
+            {
+                _statusMsg = "自动存档失败: " + ex.Message;
             }
         }
 

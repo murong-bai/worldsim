@@ -20,15 +20,18 @@ namespace Sim.Core
         public readonly TileRule[] TileRules;
         public readonly RecipeDef[] Recipes;
         public readonly CommandQueue Commands;
+        /// <summary>全局参数（world.json：支撑跨度/世界边界等）。参与模拟 → 入哈希语义（配置即模拟输入）。</summary>
+        public readonly GlobalDef Global;
 
         private readonly List<ISimSystem> _systems = new List<ISimSystem>();
         private readonly Dictionary<string, int> _recipeIndexById = new Dictionary<string, int>();
 
-        public Simulation(ulong seed, TileRule[] tileRules, RecipeDef[] recipes = null)
+        public Simulation(ulong seed, TileRule[] tileRules, RecipeDef[] recipes = null, GlobalDef global = null)
         {
             Seed = seed;
             TileRules = tileRules;
             Recipes = recipes ?? new RecipeDef[0];
+            Global = global ?? GlobalDef.Default;
             for (int i = 0; i < Recipes.Length; i++)
             {
                 _recipeIndexById[Recipes[i].Id] = i;

@@ -1,8 +1,8 @@
 # 横板建造游戏（代号待定）
 
-横板像素风轻模拟建造经营游戏，支持合作共建联机。设计与架构基准见 [docs/GDD.md](docs/GDD.md)（v0.2，M0 设计冻结）。
+横板像素风轻模拟建造经营游戏，支持合作共建联机。设计与架构基准见 [docs/GDD.md](docs/GDD.md)（v0.3，M2 规划冻结）。
 
-**当前状态：M1 垂直切片完成 ✅（2026-11-05）—— 玩法核心 + 存档/读档 + 双平台 CI 绿灯（`github.com/murong-bai/worldsim`），81/81 项测试通过。下一阶段：M2 可玩 Alpha。**
+**当前状态：M2 可玩 Alpha 开发中 —— M2.0 技术清债完成 ✅（2026-11-05：全局参数数据驱动 world.json / 世界扩至 512 格 / 自动存档 3000 tick / 相机边界钳制），84/84 项测试通过。下一子阶段：M2.1 内容 T0–T1。**
 
 ---
 
@@ -17,7 +17,7 @@ UnityProject/                  Unity 2022.3 LTS 工程
     Sim.Data/                  零依赖 JSON 解析 + 方块/物品/配方定义加载
     Sim.Systems/               模拟系统（玩家物理 / 作物生长 / 掉落物重力 / 加工推进）
   Assets/_Client/              表现层（SimBootstrap / 渲染栈 / PlayerInputRouter 输入路由）
-  Assets/Content/Defs/         内容定义（tiles/items/recipes JSON）
+  Assets/Content/Defs/         内容定义（tiles/items/recipes/world JSON；world 为全局参数）
 tests/SimHarness/              确定性验证 harness（net8.0 控制台，CI 友好）
 ```
 
@@ -26,7 +26,7 @@ tests/SimHarness/              确定性验证 harness（net8.0 控制台，CI �
 ### 跑确定性测试（无需 Unity）
 
 ```bash
-dotnet run --project tests/SimHarness              # 全部 81 项测试（exit code 0 门禁）
+dotnet run --project tests/SimHarness              # 全部 84 项测试（exit code 0 门禁）
 dotnet run --project tests/SimHarness -- report    # 固定剧本哈希报告（CI 双平台比对物）
 ```
 
@@ -53,7 +53,7 @@ exit code 0 = 全部通过。覆盖：定点数运算、确定性随机、定义
 
 `.github/workflows/ci.yml`，push / PR / 手动触发：
 
-1. **harness job**（`ubuntu-latest` + `windows-latest` 双矩阵）：跑 81 项测试（exit code 门禁）
+1. **harness job**（`ubuntu-latest` + `windows-latest` 双矩阵）：跑 84 项测试（exit code 门禁）
    → 报告模式生成各自平台的 `hash-report-<os>.txt` → 上传 artifact；
 2. **compare job**：下载双平台报告并 `diff` —— **任何一行哈希不一致即构建失败**
    （存在平台相关的不确定性 = 合作共建联机的红线，GDD §3.3）。

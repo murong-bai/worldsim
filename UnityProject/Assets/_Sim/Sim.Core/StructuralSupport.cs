@@ -27,9 +27,6 @@ namespace Sim.Core
     /// </summary>
     public static class StructuralSupport
     {
-        /// <summary>水平跨度上限：距最近锚点最多 6 格（M2 移入 JSON 配置）。</summary>
-        public const int MaxHorizontalSpan = 6;
-
         /// <summary>BFS 防御上限：访问节点数超过此值按「无支撑」处理。</summary>
         private const int MaxBfsNodes = 4096;
 
@@ -54,7 +51,7 @@ namespace Sim.Core
                 // 垂直向下：下方是 platform → 继续传递（不计水平步，支持高塔）
                 EnqueuePlatform(sim, queue, visited, node.P.X, node.P.Y - 1, node.H);
                 // 水平：左右 platform，水平步 +1，受跨度约束
-                if (node.H < MaxHorizontalSpan)
+                if (node.H < sim.Global.MaxHorizontalSpan)
                 {
                     EnqueuePlatform(sim, queue, visited, node.P.X - 1, node.P.Y, node.H + 1);
                     EnqueuePlatform(sim, queue, visited, node.P.X + 1, node.P.Y, node.H + 1);

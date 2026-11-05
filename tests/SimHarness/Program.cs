@@ -80,7 +80,7 @@ namespace SimHarness
 
         private static Simulation BuildSim(ulong seed, Defs defs)
         {
-            var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray());
+            var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray(), defs.Global);
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());
@@ -172,6 +172,15 @@ namespace SimHarness
                 }
             }
             Check(stable, "Defs: 数字 ID 分配跨加载稳定");
+
+            // world.json：全局参数（M2.0 数据驱动迁移）
+            Check(defs.Global.MaxHorizontalSpan == 6, "Defs: 支撑跨度从 world.json 加载 = 6");
+            Check(defs.Global.WorldLeft == -256 && defs.Global.WorldRight == 255 && defs.Global.Width == 512,
+                "Defs: 世界 512 格宽（-256..255，16 chunk 对齐）");
+            var simW = BuildSim(900, defs);
+            Check(simW.IsSolid(new GridPos(-256, -10)) && simW.IsSolid(new GridPos(255, -10))
+                && !simW.IsSolid(new GridPos(-257, -10)) && !simW.IsSolid(new GridPos(256, -10)),
+                "Defs: 地形精确覆盖世界边界（边界外无方块）");
         }
 
         private static void TestCommandPipeline()
@@ -268,7 +277,7 @@ namespace SimHarness
         /// <summary>专用平坦跑道世界（无地形随机性，聚焦角色物理、背包与加工断言）。</summary>
         private static Simulation BuildRunwaySim(Defs defs, ulong seed)
         {
-            var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray());
+            var sim = new Simulation(seed, defs.TileRules, defs.Recipes.ToArray(), defs.Global);
             sim.RegisterSystem(new PlayerMovementSystem());
             sim.RegisterSystem(new ItemGravitySystem());
             sim.RegisterSystem(new PickupSystem());

@@ -1,22 +1,20 @@
 namespace Sim.Core
 {
     /// <summary>
-    /// M1 测试地图生成：用「种子派生的独立随机流」生成 2 chunk 宽的小地图
-    /// （随机游走地表 + 泥土层 + 石层 + 稀疏树木）。
+    /// M1/M2 过渡期地图生成：用「种子派生的独立随机流」在 GlobalDef 世界边界内
+    /// 生成地形（随机游走地表 + 泥土层 + 石层 + 稀疏树木）。M2.0 起世界宽 512 格
+    /// （16 chunk，world.json 配置）。
     /// 正式版主基地为固定手工地图（JSON，见 GDD §2.2 决策 3），本类仅服务垂直切片与测试。
     /// </summary>
     public static class WorldGen
     {
-        public const int Left = -32;
-        public const int Right = 31;
-
         public static void GenerateTerrain(Simulation sim, KnownTiles tiles)
         {
             // 独立派生流：地形生成不消耗运行期随机流 Rng
             var rng = new SimRandom(sim.Seed ^ 0x5EEDCA75UL);
 
             int ground = 0;
-            for (int x = Left; x <= Right; x++)
+            for (int x = sim.Global.WorldLeft; x <= sim.Global.WorldRight; x++)
             {
                 ground += rng.NextInt(-1, 2);          // -1/0/+1 随机游走
                 if (ground < -4) ground = -4;

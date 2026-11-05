@@ -16,7 +16,9 @@ namespace Sim.Data
             string tiles = ReadFile(Path.Combine(directory, "tiles.json"));
             string items = ReadFile(Path.Combine(directory, "items.json"));
             string recipes = ReadFile(Path.Combine(directory, "recipes.json"));
-            return Load(tiles, items, recipes);
+            string worldPath = Path.Combine(directory, "world.json");
+            string world = File.Exists(worldPath) ? File.ReadAllText(worldPath) : null;
+            return Load(tiles, items, recipes, world);
         }
 
         private static string ReadFile(string path)
@@ -26,12 +28,13 @@ namespace Sim.Data
             return File.ReadAllText(path);
         }
 
-        public static Defs Load(string tilesJson, string itemsJson, string recipesJson)
+        public static Defs Load(string tilesJson, string itemsJson, string recipesJson, string worldJson = null)
         {
             var defs = new Defs();
             LoadItems(defs, itemsJson);
             LoadTiles(defs, tilesJson);
             LoadRecipes(defs, recipesJson);
+            if (worldJson != null) LoadWorld(defs, worldJson);
             return defs;
         }
 
@@ -136,6 +139,27 @@ namespace Sim.Data
                 tile.GetInt("placeCount", 1),
                 tile.GetBool("workbench", false),
                 tile.GetBool("needsSupport", false));
+        }
+
+        /// <summary>world.json → GlobalDef（全局模拟参数）。数值即模拟输入，异常值尽早抛出。</summary>
+        private static void LoadWorld(Defs defs, string worldJson)
+        {
+            var root = Json.Parse(worldJson);
+            if (root.Type != JsonValue.Kind.Object) throw new FormatException("world.json: 顶层应为对象");
+
+            var g = new GlobalDef();
+            g.MaxHorizontalSpan = root.GetInt("maxHorizontalSpan", g.MaxHorizontalSpan);
+            g.WorldLeft = root.GetInt("worldLeft", g.WorldLeft);
+            g.WorldRight = root.GetInt("worldRight", g.WorldRight);
+
+            if (g.MaxHorizontalSpan < 1 || g.MaxHorizontalSpan > 64)
+                throw new FormatException("world.json: maxHorizontalSpan 应在 1..64");
+            if (g.WorldRight <= g.WorldLeft || g.Width > 4096)
+                throw new FormatException("world.json: 世界宽度应在 1..4096 格");
+            if (g.WorldLeft % 32 != 0 || (g.WorldRight + 1) % 32 != 0)
+                throw new FormatException("world.json: worldLeft/worldRight+1 须与 32 格 chunk 对齐");
+
+            defs.Global = g;
         }
 
         private static void LoadRecipes(Defs defs, string recipesJson)

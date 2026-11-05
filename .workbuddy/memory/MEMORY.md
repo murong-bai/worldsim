@@ -15,10 +15,12 @@
 8. 世界生成：固定手工主基地 + 程序生成郊外（种子驱动）
 9. 商业模式：全平台买断制（移动端不做 F2P）
 10. 美术风格：像素风（16×16 基准格 + 有限调色板）
+11. 小人移动能力：不能跳跃，仅攀爬梯子 + 跨上一格高方块（寻路图简化；玩家保留跳跃 = 能力超集，同一 PlayerMovementSystem 复用）
+12. 里程碑仅作提示与引导，不作蓝图/配方解锁条件（解锁一律走科技树）
 
-**基准文档**：docs/GDD.md（v0.2，2026-11-05，M0 设计冻结；§4 已标 M1 ✅）——重大决策变更需更新此文档并记录版本。
+**基准文档**：docs/GDD.md（v0.3，2026-11-05，M2 规划冻结含 §4.1 细化拆解；§4 已标 M1 ✅）——重大决策变更需更新此文档并记录版本。
 
-**工程状态（2026-11-05）**：**M1 垂直切片全部完成 ✅（含 CI 双平台哈希比对绿灯）**——玩法核心（操控/背包/加工/支撑）、存档读档、Unity 真机编译渲染验证（Play 画面正常）、远端推送全部达成。远端仓库 `https://github.com/murong-bai/worldsim`（GitHub 账号 murong-bai）。下一步：M2 可玩 Alpha（T0–T1 内容 + 小人任务 AI + 电力系统）。
+**工程状态（2026-11-05）**：**M1 垂直切片全部完成 ✅（含 CI 双平台哈希比对绿灯 + 用户手感确认）**——玩法核心（操控/背包/加工/支撑）、存档读档、Unity 真机编译渲染验证（Play 画面正常）、远端推送全部达成。远端仓库 `https://github.com/murong-bai/worldsim`（GitHub 账号 murong-bai）。下一步：M2 可玩 Alpha，按 §4.1 顺序推进——M2.0 技术清债（硬编码移 JSON/世界扩 512 格/自动存档 3000 tick/相机边界钳制）→ M2.1 内容 T0–T1（石/木/食物三线 + 铜煤矿脉）→ M2.2 小人任务 AI（确定性 A*，无跳跃）→ M2.3 电力系统。
 
 **git 推送要点（本机网络特殊，重要）**：本机走 Watt Toolkit（SteamTools）系统代理（127.0.0.1:26561，**端口可能随重启变化**，失效时查注册表 `HKCU\...\Internet Settings\ProxyServer`），对 HTTPS 做 MITM。git 需 OpenSSL 后端 + 信任 SteamTools 根证书（`steamtools-root.pem` 在工作区根目录、已 gitignore），三参数已写入**仓库本地 git config**（http.proxy / http.sslBackend / http.sslCAInfo）——config 优先级高于环境变量，所以 agent shell 里直接 `git push` 也能通。推送授权已缓存（GCM）。`api.github.com` 不被 Watt Toolkit 加速（查询 CI 状态用浏览器看 Actions 页）。仓库 git 身份：muron / muron@local。
 

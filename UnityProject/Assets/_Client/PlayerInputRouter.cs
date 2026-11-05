@@ -268,11 +268,24 @@ namespace Sim.Client
             return new GridPos(Mathf.FloorToInt(world.x), Mathf.FloorToInt(world.y));
         }
 
-        /// <summary>相机平滑跟随玩家（表现层行为，不影响模拟）。</summary>
+        /// <summary>
+        /// 相机平滑跟随玩家（表现层行为，不影响模拟），并钳制在世界水平边界内
+        /// （M2.0：512 格世界，防止视野长期跑出边界外露空底色）。
+        /// </summary>
         private void LateUpdate()
         {
             if (_sim == null || !_sim.Entities.TryGet(_playerId, out var e)) return;
             var target = new Vector3(e.FixX.ToFloat(), e.FixY.ToFloat() + 1f, -10f);
+
+            // 边界钳制：视野半宽 = orthographicSize × aspect（世界格 = 1 单位）
+            float halfWidth = _camera.orthographicSize * _camera.aspect;
+            float minX = _sim.Global.WorldLeft + halfWidth;
+            float maxX = _sim.Global.WorldRight + 1f - halfWidth;
+            if (minX < maxX)
+            {
+                target.x = Mathf.Clamp(target.x, minX, maxX);
+            }
+
             _camera.transform.position = Vector3.Lerp(
                 _camera.transform.position, target, CameraLerp * Time.deltaTime);
         }
