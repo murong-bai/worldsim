@@ -12,6 +12,10 @@ UnityProject/Assembly-CSharp*.csproj
 *.pdb.meta
 *.mdb.meta
 
+# 本地网络诊断产物（Watt Toolkit MITM 根证书导出）
+steamtools-root.cer
+steamtools-root.pem
+
 # .NET / dotnet
 bin/
 obj/

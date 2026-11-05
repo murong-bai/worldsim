@@ -2,7 +2,7 @@
 
 横板像素风轻模拟建造经营游戏，支持合作共建联机。设计与架构基准见 [docs/GDD.md](docs/GDD.md)（v0.2，M0 设计冻结）。
 
-**当前状态：M1 玩法核心 + 存档/读档全部完成 —— 81/81 项测试通过（含读档后继续游玩与原局一致）。剩余：CI 双平台哈希比对。**
+**当前状态：M1 垂直切片工程全部完成 —— 玩法核心 + 存档/读档 + 双平台 CI，81/81 项测试通过。剩余收尾：Unity 编辑器内真机全流程验证。**
 
 ---
 
@@ -26,8 +26,13 @@ tests/SimHarness/              确定性验证 harness（net8.0 控制台，CI �
 ### 跑确定性测试（无需 Unity）
 
 ```bash
-dotnet run --project tests/SimHarness
+dotnet run --project tests/SimHarness              # 全部 81 项测试（exit code 0 门禁）
+dotnet run --project tests/SimHarness -- report    # 固定剧本哈希报告（CI 双平台比对物）
 ```
+
+报告模式输出 `hash-report.txt`（`worldsim-ci 1` 格式）：主线采样
+`hash@0/300/600/900/1200` + `reload@600` / `reload_continue@1200` / `replay@1200`
+四条路径的 WorldHash。报告全 ASCII、LF 换行、UTF-8 无 BOM —— 双平台产物可逐字节 diff。
 
 exit code 0 = 全部通过。覆盖：定点数运算、确定性随机、定义加载与 ID 稳定性、
 命令流水线（放置/挖掘/掉落）、掉落物重力、作物生长与收获、
@@ -43,6 +48,19 @@ exit code 0 = 全部通过。覆盖：定点数运算、确定性随机、定义
 **种子+命令日志回放一致**（存档格式验证）。
 
 > 联机前置验收（GDD §3.3）：CI 需在 Windows/Linux 双平台跑同一命令脚本并比对哈希输出。
+
+## CI：双平台确定性哈希比对（GitHub Actions）
+
+`.github/workflows/ci.yml`，push / PR / 手动触发：
+
+1. **harness job**（`ubuntu-latest` + `windows-latest` 双矩阵）：跑 81 项测试（exit code 门禁）
+   → 报告模式生成各自平台的 `hash-report-<os>.txt` → 上传 artifact；
+2. **compare job**：下载双平台报告并 `diff` —— **任何一行哈希不一致即构建失败**
+   （存在平台相关的不确定性 = 合作共建联机的红线，GDD §3.3）。
+
+启用方式：把本仓库推到 GitHub 即生效（Actions 免费额度内）。本地已验证：Windows 端
+双运行报告逐字节一致，且四条路径哈希收敛（`reload@600 == hash@600`、
+`reload_continue@1200 == replay@1200 == hash@1200`）。
 
 ### 打开 Unity 工程（需先安装 Unity 2022.3 LTS + Unity Hub）
 
@@ -113,9 +131,16 @@ worldsim|1|{种子}|{存档时tick}     ← 头行：魔数|版本
 - [x] 一条完整生产链闭环（种植 → 收获 → 加工：工作台 tile + CraftingStore 任务板 + CraftCommand 权威合成 + CraftingSystem 推进产出 + F/C 客户端交互）
 - [x] 支撑规则（StructuralSupport：BFS 锚点+跨度判定、放置校验在材料消耗前、挖掘级联坍塌等值回收、塌落自动进 WorldChanges）
 - [x] 存档/读档（SaveLoad：种子 + 命令日志文本格式，F5/F9，读档后继续游玩与原局一致）
-- [ ] CI：双平台跑 harness 比对哈希
+- [x] CI：双平台跑 harness 比对哈希（GitHub Actions workflow + harness 报告模式；本地 WSL 被安全策略拦截，Linux 端验证由 CI 承担）
+
+## M1 收尾（工程代码之外）
+
+- [ ] Unity 编辑器内全流程真机验证：挂 `SimBootstrap` → Play → 挖/建/种/加工 → F5 存档 → F9 读档继续玩
+- [ ] 推送 GitHub 激活 CI，确认双平台哈希比对绿灯
 
 ## 版本记录
+
+- 2026-11-05 M1-CI：harness 报告模式（`dotnet run -- report`，固定剧本四路径哈希采样：主线/读档重建/读档继续/编解码回放；报告全 ASCII/LF/UTF-8 无 BOM，可逐字节 diff）；GitHub Actions 双平台 workflow（ubuntu+windows 矩阵 + compare job diff 报告，不一致即红）；git 初始化首次提交。**哈希不变**（零模拟逻辑改动）；本地验证：双运行报告逐字节一致、四路径哈希收敛（`66672E7D…`）
 
 - 2026-11-05 M1-存档：Sim.Commands/SaveLoad（`worldsim|1|seed|tick` 头 + 命令行，与联机命令同格式；Serialize/Parse/ReplayInto）；客户端 F5 存档 / F9 读档（persistentDataPath/slot1.sav，单槽），读档 = 同种子重建 + 重放 + 全量重绘 + 输入强制重发；SimBootstrap 重构（BuildSimulation/BindSimulation 提取，开新局与读档共用）；PlayerInputRouter 拆分 Init（非模拟依赖）/Rebind/ForceResend；harness 81/81（存档专项 4 项：头信息一致/读档重建/读档后继续与原局一致/损坏拒绝）；**哈希不变**（零模拟逻辑改动）
 
