@@ -1,0 +1,11 @@
+[
+  { "id": "air", "solid": false, "placeable": false },
+  { "id": "dirt", "solid": true, "placeable": true, "dropItem": "dirt", "placeItem": "dirt", "color": "#7A5230" },
+  { "id": "stone", "solid": true, "placeable": true, "dropItem": "stone", "placeItem": "stone", "color": "#787D85" },
+  { "id": "soil", "solid": false, "placeable": true, "dropItem": "dirt", "placeItem": "dirt", "color": "#4A3626" },
+  { "id": "platform", "solid": false, "placeable": true, "blocksItems": true, "dropItem": "wood", "placeItem": "wood", "needsSupport": true, "color": "#C08552" },
+  { "id": "support_beam", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "color": "#8B5A3B" },
+  { "id": "tree", "solid": false, "placeable": false, "dropItem": "wood", "color": "#3B7A3B" },
+  { "id": "wheat_crop", "solid": false, "placeable": true, "placeItem": "wheat_seed", "growthTicks": 150, "harvestItem": "wheat", "color": "#D4A017" },
+  { "id": "workbench", "solid": true, "placeable": true, "dropItem": "wood", "placeItem": "wood", "placeCount": 2, "workbench": true, "color": "#8B6F47" }
+]

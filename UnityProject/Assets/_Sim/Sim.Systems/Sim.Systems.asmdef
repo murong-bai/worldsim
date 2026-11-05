@@ -1,0 +1,16 @@
+{
+    "name": "Sim.Systems",
+    "rootNamespace": "Sim",
+    "references": [
+        "Sim.Core"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}

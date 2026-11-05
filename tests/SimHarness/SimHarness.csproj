@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>SimHarness</AssemblyName>
+    <RootNamespace>SimHarness</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 直接编译 Unity 工程内的纯 C# 模拟核心（逻辑/表现分离：本工程不含任何表现层代码） -->
+    <Compile Include="..\..\UnityProject\Assets\_Sim\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 内容定义随构建复制到输出目录，供 DefLoader 读取 -->
+    <None Include="..\..\UnityProject\Assets\Content\Defs\*.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="Defs\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

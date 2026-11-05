@@ -1,0 +1,27 @@
+# Unity
+UnityProject/Library/
+UnityProject/Temp/
+UnityProject/Obj/
+UnityProject/Build/
+UnityProject/Logs/
+UnityProject/UserSettings/
+UnityProject/*.csproj
+UnityProject/*.sln
+UnityProject/Assembly-CSharp*.csproj
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# .NET / dotnet
+bin/
+obj/
+*.user
+.vs/
+
+# harness 本地产物（报告/存档不入库，CI 各自生成）
+tests/SimHarness/*.txt
+*.sav
+
+# IDE
+.idea/
+.vscode/

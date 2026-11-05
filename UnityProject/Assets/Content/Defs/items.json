@@ -1,0 +1,9 @@
+[
+  { "id": "dirt", "name": "泥土", "color": "#7A5230" },
+  { "id": "stone", "name": "石块", "color": "#787D85" },
+  { "id": "wood", "name": "木料", "color": "#A9713B" },
+  { "id": "wheat", "name": "小麦", "color": "#E0B94D" },
+  { "id": "wheat_seed", "name": "小麦种子", "color": "#B8A04A" },
+  { "id": "bread", "name": "面包", "color": "#C89F6B" },
+  { "id": "stone_bricks", "name": "石砖", "color": "#9CA3AB" }
+]

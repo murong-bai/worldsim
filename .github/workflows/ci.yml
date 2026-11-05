@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # 双平台各跑一遍 harness：81 项确定性测试（exit code 0 门禁）
+  # + 固定剧本哈希报告（worldsim-ci 格式，ASCII/LF，可逐字节 diff）
+  harness:
+    name: determinism (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run determinism tests
+        run: dotnet run --project tests/SimHarness
+
+      - name: Write hash report
+        run: dotnet run --project tests/SimHarness -- report hash-report-${{ matrix.os }}.txt
+
+      - name: Upload hash report
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.os }}
+          path: hash-report-${{ matrix.os }}.txt
+
+  # 联机前置验收（GDD §3.3）：Windows/Linux 哈希报告必须逐字节一致。
+  # 任何一行不同 = 存在平台相关的不确定性 —— 合作共建联机的红线。
+  compare:
+    name: compare cross-platform hashes
+    needs: harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: reports
+
+      - name: Diff reports (any difference fails the build)
+        run: |
+          echo "=== ubuntu-latest ==="
+          cat reports/report-ubuntu-latest/hash-report-ubuntu-latest.txt
+          echo "=== windows-latest ==="
+          cat reports/report-windows-latest/hash-report-windows-latest.txt
+          diff reports/report-ubuntu-latest/hash-report-ubuntu-latest.txt \
+               reports/report-windows-latest/hash-report-windows-latest.txt
+          echo "CROSS_PLATFORM_HASH_MATCH"
