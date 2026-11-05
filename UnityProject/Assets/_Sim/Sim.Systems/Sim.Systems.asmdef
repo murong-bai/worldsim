@@ -2,7 +2,8 @@
     "name": "Sim.Systems",
     "rootNamespace": "Sim",
     "references": [
-        "Sim.Core"
+        "Sim.Core",
+        "Sim.Commands"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
